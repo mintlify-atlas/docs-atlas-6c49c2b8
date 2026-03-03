@@ -1,0 +1,331 @@
+---
+title: Soil Analysis Endpoint
+description: Analyze soil properties from RGB color values
+---
+
+## Overview
+
+The soil analysis endpoint converts RGB color values from soil images into actionable agricultural data. It uses machine learning models to predict soil pH, water availability, and optimal harvest season based on soil color analysis.
+
+## Endpoint
+
+<CodeGroup>
+```bash POST /api/get_first_results/
+curl -X POST http://localhost:8000/api/get_first_results/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "R": 165,
+    "G": 120,
+    "B": 85,
+    "label": "rice",
+    "country": "Nigeria"
+  }'
+```
+</CodeGroup>
+
+Processes soil RGB color values to determine soil properties and generate crop-specific recommendations.
+
+## Request Schema
+
+The endpoint accepts the `FirstData` model:
+
+<ParamField body="R" type="integer" required>
+  Red color channel value (0-255)
+</ParamField>
+
+<ParamField body="G" type="integer" required>
+  Green color channel value (0-255)
+</ParamField>
+
+<ParamField body="B" type="integer" required>
+  Blue color channel value (0-255)
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being analyzed (e.g., "rice", "maize", "cotton")
+</ParamField>
+
+<ParamField body="country" type="string" required>
+  Country where the farm is located (e.g., "Nigeria", "Kenya", "India")
+</ParamField>
+
+## Response Schema
+
+The endpoint returns a comprehensive analysis object:
+
+<ResponseField name="ph" type="float">
+  Predicted soil pH value from RGB analysis
+</ResponseField>
+
+<ResponseField name="water_availability" type="float">
+  Predicted water availability in mm based on soil color
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  Crop type (echoed from request)
+</ResponseField>
+
+<ResponseField name="Country" type="string">
+  Country name (echoed from request)
+</ResponseField>
+
+<ResponseField name="harvest_season" type="string">
+  Predicted optimal harvest season (e.g., "Summer", "Winter", "Monsoon")
+</ResponseField>
+
+<ResponseField name="exp_ph" type="object">
+  Expected pH ranges for the specified crop
+  
+  <Expandable title="properties">
+    <ResponseField name="min" type="float">
+      Minimum acceptable pH for the crop
+    </ResponseField>
+    
+    <ResponseField name="max" type="float">
+      Maximum acceptable pH for the crop
+    </ResponseField>
+    
+    <ResponseField name="opt" type="float">
+      Optimal pH value for maximum yield
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exp_water_availability" type="object">
+  Expected water availability ranges for the specified crop
+  
+  <Expandable title="properties">
+    <ResponseField name="min" type="float">
+      Minimum water availability in mm
+    </ResponseField>
+    
+    <ResponseField name="max" type="float">
+      Maximum water availability in mm
+    </ResponseField>
+    
+    <ResponseField name="opt" type="float">
+      Optimal water availability in mm
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="duration" type="float">
+  Crop growth duration in days from planting to harvest
+</ResponseField>
+
+<ResponseField name="ph_rec" type="object">
+  pH recommendation and suitability assessment
+  
+  <Expandable title="properties">
+    <ResponseField name="status" type="integer">
+      1 if current pH is within acceptable range, 0 otherwise
+    </ResponseField>
+    
+    <ResponseField name="scale" type="float">
+      Suitability score (0-100) based on proximity to optimal pH
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="water_availability_rec" type="object">
+  Water availability recommendation and suitability assessment
+  
+  <Expandable title="properties">
+    <ResponseField name="status" type="integer">
+      1 if water availability is within acceptable range, 0 otherwise
+    </ResponseField>
+    
+    <ResponseField name="scale" type="float">
+      Suitability score (0-100) based on proximity to optimal water availability
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request & Response
+
+**Request:**
+```json
+{
+  "R": 165,
+  "G": 120,
+  "B": 85,
+  "label": "rice",
+  "country": "Nigeria"
+}
+```
+
+**Response:**
+```json
+{
+  "ph": 6.8,
+  "water_availability": 145.3,
+  "label": "rice",
+  "Country": "Nigeria",
+  "harvest_season": "Monsoon",
+  "exp_ph": {
+    "min": 5.5,
+    "max": 7.0,
+    "opt": 6.5
+  },
+  "exp_water_availability": {
+    "min": 100.0,
+    "max": 200.0,
+    "opt": 150.0
+  },
+  "duration": 140.0,
+  "ph_rec": {
+    "status": 1,
+    "scale": 94.5
+  },
+  "water_availability_rec": {
+    "status": 1,
+    "scale": 97.8
+  }
+}
+```
+
+## How It Works
+
+### 1. RGB to Soil Profile Conversion
+
+The `get_SoilProfile()` function (`general.py:57`) performs the following analysis:
+
+#### Color Feature Extraction
+- Calculates color ratios: R/G, G/B, R/B
+- Converts RGB to HSV color space for hue, saturation, and brightness
+- Computes grayscale value using standard luminosity formula: `0.299*R + 0.582*G + 0.114*B`
+
+#### Soil pH Prediction
+Uses a pre-trained XGBoost classifier (`soil_colour_model.pkl`) that predicts pH based on:
+- RGB values and ratios
+- Hue, saturation, and brightness
+
+**Model formula (`general.py:97`):**
+```python
+soil_pH = soil_model.predict(rgb_data)[0]
+```
+
+#### Water Availability Calculation
+Uses linear interpolation based on soil darkness (`general.py:99-104`):
+
+```python
+gray_scale = 1 - ((R*0.299 + G*0.582 + B*0.114)/255)
+water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+```
+
+**Logic:** Darker soils (higher grayscale) indicate higher water retention capacity.
+
+### 2. Harvest Season Prediction
+
+The `get_HarvestSeason()` function (`general.py:108`) uses a machine learning model:
+
+- Accepts: pH, water availability, crop label, and country
+- Creates feature vector with one-hot encoding for categorical variables
+- Adds derived feature: `ph_to_water_availability_ratio`
+- Predicts harvest season using XGBoost classifier (`main_model_xgboost.pkl`)
+- Returns decoded season label (e.g., "Summer", "Winter", "Monsoon")
+
+### 3. Suitability Assessment
+
+Two metrics evaluate crop suitability:
+
+#### Status Calculation (`general.py:142`)
+Binary indicator (0 or 1) showing if the value falls within acceptable range:
+
+```python
+if value >= min_range and value <= max_range:
+    status = 1
+else:
+    status = 0
+```
+
+#### Scale Calculation (`general.py:149`)
+Gaussian-based suitability score (0-100) showing proximity to optimal value:
+
+```python
+absolute_difference = abs(optimal_value - actual_value)
+scale_value = 100 * exp(-k * absolute_difference^2)
+```
+
+**Decay constants:**
+- pH: `k = 0.6` (faster decay)
+- Water availability: `k = 0.00025` (slower decay)
+
+## Crop Growth Durations
+
+The endpoint returns crop-specific growth durations (`general.py:37`):
+
+| Crop | Duration (days) |
+|------|----------------|
+| blackgram | 75 |
+| chickpea | 105 |
+| cotton | 165 |
+| jute | 135 |
+| kidneybeans | 115 |
+| lentil | 115 |
+| maize | 80 |
+| mothbeans | 75 |
+| mungbean | 75 |
+| muskmelon | 85 |
+| pigeonpeas | 120 |
+| rice | 140 |
+| watermelon | 80 |
+
+## Machine Learning Models
+
+The endpoint uses pre-trained models loaded at startup:
+
+1. **Soil Color Model** (`ML_Models/soil_colour_model.pkl`)
+   - Predicts pH from RGB features
+   - Type: XGBoost Classifier
+
+2. **Main Prediction Model** (`ML_Models/main_model_xgboost.pkl`)
+   - Predicts harvest season
+   - Type: XGBoost Classifier
+
+3. **Label Encoder** (`ML_Models/label_encoder.pkl`)
+   - Decodes season predictions to text labels
+
+4. **Crop Information Database** (`ML_Models/crop_info.pkl`)
+   - Contains optimal ranges for all environmental factors per crop
+
+<Warning>
+**Model Files Required:** The endpoint will fail if ML model files are not present in the `ML_Models/` directory. Ensure all `.pkl` files are properly deployed with the application.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="RGB Value Collection">
+    - Use consistent lighting conditions when capturing soil images
+    - Avoid shadows or direct sunlight that can skew color values
+    - Sample from moist (not wet) soil for accurate color representation
+    - Average RGB values from multiple soil samples for better accuracy
+  </Accordion>
+  
+  <Accordion title="Supported Countries">
+    The model is trained on specific countries. While any country string is accepted, predictions are most accurate for countries in the training dataset. Check `one_hot_encoder_info.pkl` for the complete list.
+  </Accordion>
+  
+  <Accordion title="Interpreting Results">
+    - **Status = 1, Scale > 80:** Excellent conditions for the crop
+    - **Status = 1, Scale 50-80:** Good conditions, minor optimization possible
+    - **Status = 0, Scale > 50:** Borderline conditions, monitor closely
+    - **Status = 0, Scale < 50:** Poor conditions, significant intervention needed
+  </Accordion>
+  
+  <Accordion title="Combining with Environmental Data">
+    For complete analysis, use this endpoint first to get pH and water availability, then use `/api/get_second_results/` with measured temperature and humidity data.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+**Invalid RGB values (< 0 or > 255):**
+May cause calculation errors. Ensure values are within valid range.
+
+**Unknown crop label:**
+Will cause KeyError when accessing crop_info. Use only supported crop labels.
+
+**Missing model files:**
+Will cause FileNotFoundError at application startup. Ensure all ML models are deployed.

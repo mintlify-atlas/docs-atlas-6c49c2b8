@@ -1,0 +1,256 @@
+---
+title: How It Works
+description: Detailed workflow from soil image analysis to harvest prediction and farming recommendations
+---
+
+## System Workflow
+
+MavunoX processes soil images through a three-stage pipeline to deliver harvest predictions and personalized farming recommendations. Here's how the system works end-to-end:
+
+<Steps>
+  <Step title="Soil Image Input">
+    Farmer captures a soil image, from which RGB color values are extracted
+  </Step>
+  <Step title="Soil Profile Analysis">
+    RGB values are processed through two parallel models to determine soil pH and water availability
+  </Step>
+  <Step title="Harvest Prediction">
+    Soil profile data, crop type, and location are fed into the main classifier
+  </Step>
+  <Step title="Recommendation Generation">
+    AI generates custom farming recommendations based on current conditions and crop requirements
+  </Step>
+</Steps>
+
+## Stage 1: Soil pH Prediction
+
+### Model Architecture
+
+The Soil pH Predictor uses an XGBoost regression model trained on RGB-to-pH mapping data from academic research.
+
+### Feature Engineering
+
+From the input RGB values, the system calculates:
+
+```python
+# RGB Ratios
+R/G, G/B, R/B
+
+# Hue Calculation
+hue = rgb_to_hue(R, G, B)  # Converted to 0-360 scale
+
+# Color Properties
+Saturation = colorsys.rgb_to_hsv(R/255, G/255, B/255)[1]
+Brightness = colorsys.rgb_to_hsv(R/255, G/255, B/255)[2]
+```
+
+### Model Performance
+
+- **Algorithm**: XGBoost Regressor
+- **Cross-validation RMSE**: 0.7049
+- **Training Data**: RGB values mapped to pH levels from research paper "Determine the pH of Soil by Using Neural Network Based on Soil's Colour"
+
+<Tip>
+The model achieves sub-1 pH unit error on average, providing reliable soil acidity estimates from simple smartphone photos.
+</Tip>
+
+## Stage 2: Water Availability Estimation
+
+### Calculation Method
+
+The water availability model uses a straightforward grayscale-based approach:
+
+```python
+# Step 1: Convert RGB to grayscale
+gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+
+# Step 2: Linear interpolation to water availability score
+water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+```
+
+### Interpretation
+
+The formula assumes a correlation between soil darkness (higher grayscale values) and water content:
+
+- **Darker soil** → Higher grayscale → Higher water availability score
+- **Lighter soil** → Lower grayscale → Lower water availability score
+
+<Note>
+This is a simplified approach. Ongoing research aims to enhance the model with more sophisticated techniques and additional features.
+</Note>
+
+## Stage 3: Harvest Season Prediction
+
+### Main Model Architecture
+
+The core prediction engine is an XGBoost classifier that combines all environmental and agricultural factors.
+
+### Input Features
+
+1. **Soil Profile**: pH and water availability (from Stages 1 & 2)
+2. **Crop Type**: One of 13 supported crops
+3. **Country**: Nigeria, Kenya, South Africa, or Sudan
+4. **Engineered Feature**: `ph_to_water_availability_ratio`
+
+### Data Processing
+
+```python
+# One-hot encode categorical variables
+Country: ['Nigeria', 'Kenya', 'South Africa', 'Sudan']
+Crop: ['rice', 'maize', 'chickpea', 'kidneybeans', ...]
+
+# Create ratio feature
+ph_to_water_availability_ratio = ph / water_availability
+```
+
+### Model Output
+
+The classifier predicts one of four harvest seasons:
+
+- **Spring** (Label 0)
+- **Summer** (Label 1)
+- **Rainy** (Label 2)
+- **Winter** (Label 3)
+
+### Performance Metrics
+
+| Season | Precision | Recall | F1-Score | Support |
+|--------|-----------|--------|----------|--------|
+| Class 0 | 0.85 | 0.90 | 0.88 | 117 |
+| Class 1 | 1.00 | 1.00 | 1.00 | 20 |
+| Class 2 | 1.00 | 1.00 | 1.00 | 62 |
+| Class 3 | 0.84 | 0.78 | 0.81 | 81 |
+| **Accuracy** | | | **89%** | **280** |
+
+<Info>
+The model performs exceptionally well on summer and rainy season predictions (100% F1-score), with strong performance across all seasons.
+</Info>
+
+## Stage 4: AI-Powered Recommendations
+
+### Recommendation Engine
+
+Once the harvest season is predicted, the system generates personalized farming recommendations using OpenAI's GPT-3.5 Turbo API.
+
+### Input Parameters
+
+```python
+def rec_gen(factor, min, max, value, unit, crop):
+    """
+    Generate recommendation for a specific farming factor
+    
+    Args:
+        factor: Environmental parameter (Temperature, Humidity, pH, Water)
+        min: Minimum recommended value
+        max: Maximum recommended value
+        value: Current measured value
+        unit: Unit of measurement
+        crop: Target crop type
+    """
+```
+
+### Recommendation Factors
+
+The system provides guidance on four critical environmental factors:
+
+<AccordionGroup>
+  <Accordion title="Temperature" icon="temperature-half">
+    Recommendations based on optimal temperature ranges for each crop, measured in Celsius.
+  </Accordion>
+  <Accordion title="Humidity" icon="droplet-percent">
+    Guidance on maintaining ideal humidity levels for crop health and growth.
+  </Accordion>
+  <Accordion title="Soil pH" icon="flask">
+    Soil acidity/alkalinity recommendations tailored to crop pH preferences.
+  </Accordion>
+  <Accordion title="Water Availability" icon="water">
+    Irrigation and water management advice based on crop water requirements.
+  </Accordion>
+</AccordionGroup>
+
+### Scoring System
+
+The system calculates two metrics for each environmental factor:
+
+#### Status Score (Binary)
+```python
+status = 1 if (min <= value <= max) else 0
+```
+- **1**: Value is within optimal range
+- **0**: Value is outside optimal range
+
+#### Scale Score (Gaussian)
+```python
+scale = 100 * exp(-k * (actual - optimal)²)
+```
+- Ranges from 0-100
+- Higher scores indicate values closer to the optimal point
+- Uses exponential decay for smooth scoring
+
+<Warning>
+The `k` parameter varies by factor to account for different sensitivities:
+- pH: k=0.6 (highly sensitive)
+- Temperature: k=0.04 (moderately sensitive)
+- Humidity: k=0.0015 (less sensitive)
+- Water availability: k=0.00025 (least sensitive)
+</Warning>
+
+## Growth Duration Information
+
+The system also provides crop growth duration estimates (in days):
+
+| Crop | Duration (days) |
+|------|----------------|
+| Blackgram | 75 |
+| Mothbeans | 75 |
+| Mungbean | 75 |
+| Maize | 80 |
+| Watermelon | 80 |
+| Muskmelon | 85 |
+| Chickpea | 105 |
+| Kidneybeans | 115 |
+| Lentil | 115 |
+| Pigeonpeas | 120 |
+| Jute | 135 |
+| Rice | 140 |
+| Cotton | 165 |
+
+## API Endpoints
+
+The deployed system exposes two primary endpoints:
+
+### First Data Processing
+```python
+POST /first-data-processing
+Input: {R, G, B, label (crop), country}
+Output: {
+  ph, water_availability, harvest_season,
+  exp_ph {min, max, opt},
+  exp_water_availability {min, max, opt},
+  duration,
+  ph_rec {status, scale},
+  water_availability_rec {status, scale}
+}
+```
+
+### Second Data Processing
+```python
+POST /second-data-processing
+Input: {temperature, humidity, label (crop)}
+Output: {
+  temperature, humidity,
+  exp_temperature {min, max, opt},
+  exp_humidity {min, max, opt},
+  temperature_rec {status, scale},
+  humidity_rec {status, scale}
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Data Sources" icon="database" href="/concepts/data-sources">
+    Learn about training data and crop information
+  </Card>
+  <Card title="System Overview" icon="chart-network" href="/concepts/overview">
+    Back to high-level architecture
+  </Card>
+</CardGroup>

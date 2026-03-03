@@ -1,0 +1,195 @@
+---
+title: 'Harvest Season Prediction Model'
+description: 'XGBoost-based model for predicting optimal harvest seasons using environmental factors'
+---
+
+## Overview
+
+The harvest prediction model is the main ML component of MavunoX, designed to predict optimal harvest seasons by analyzing environmental factors across Nigeria, South Africa, Kenya, and Sudan. The model uses XGBoost classifier to predict when crops should be harvested based on soil pH, water availability, crop type, and country.
+
+## Model Architecture
+
+### Algorithm
+- **Model Type**: XGBoost Classifier
+- **Model Path**: `ML_Models/main_model_xgboost.pkl`
+- **Framework**: XGBoost with scikit-learn integration
+
+### Training Data
+
+The dataset was sourced from the [Klusterthon Hackathon](https://www.kluster.africa/problem-statements/precision-farming-for-best-product-results-with-data) and includes:
+
+- **Geographic Coverage**: Nigeria (majority), South Africa, Kenya, Sudan
+- **Most Common Season**: Rainy season
+- **Dominant Crop**: Maize
+- **Key Features**: Temperature, humidity, pH, water availability, crop type, country
+
+## Data Preprocessing
+
+The model uses several preprocessing steps to prepare input data:
+
+### 1. Feature Engineering
+
+```python
+# pH to water availability ratio
+ph_to_water_availability_ratio = ph / water_availability
+```
+
+### 2. One-Hot Encoding
+
+Categorical variables are one-hot encoded:
+- **Country**: Nigeria, South Africa, Kenya, Sudan
+- **Crop Label**: 13 supported crops (see Supported Crops section)
+
+### 3. Column Alignment
+
+```python
+# Ensure columns match training data
+new_data_encoded = new_data_encoded.reindex(
+    columns=one_hot_encoder_info['columns'], 
+    fill_value=0
+)
+```
+
+## Model Performance
+
+### Overall Metrics
+
+- **Accuracy**: 89%
+- **Macro Average Precision**: 92%
+- **Macro Average Recall**: 92%
+- **Macro Average F1-Score**: 92%
+
+### Per-Class Performance
+
+| Season | Precision | Recall | F1-Score | Support |
+|--------|-----------|--------|----------|---------|
+| 0      | 0.85      | 0.90   | 0.88     | 117     |
+| 1      | 1.00      | 1.00   | 1.00     | 20      |
+| 2      | 1.00      | 1.00   | 1.00     | 62      |
+| 3      | 0.84      | 0.78   | 0.81     | 81      |
+
+## Input/Output Specification
+
+<ParamField path="input.ph" type="float" required>
+  Soil pH level (predicted by soil pH predictor model)
+</ParamField>
+
+<ParamField path="input.water_availability" type="float" required>
+  Water availability score 25-250 (predicted by water availability model)
+</ParamField>
+
+<ParamField path="input.label" type="string" required>
+  Crop type - must be one of the 13 supported crops
+</ParamField>
+
+<ParamField path="input.Country" type="string" required>
+  Country name: Nigeria, South Africa, Kenya, or Sudan
+</ParamField>
+
+<ParamField path="output.harvest_season" type="string">
+  Predicted harvest season (decoded from label encoder)
+</ParamField>
+
+## Usage Example
+
+```python
+import pickle
+import pandas as pd
+
+# Load model and encoders
+with open('ML_Models/main_model_xgboost.pkl', 'rb') as f:
+    model = pickle.load(f)
+
+with open('ML_Models/label_encoder.pkl', 'rb') as f:
+    label_encoder = pickle.load(f)
+
+with open('ML_Models/one_hot_encoder_info.pkl', 'rb') as f:
+    one_hot_encoder_info = pickle.load(f)
+
+# Prepare input data
+new_entry = {
+    'ph': 6.5,
+    'water_availability': 180.5,
+    'label': 'rice',
+    'Country': 'Nigeria'
+}
+
+# Convert to DataFrame and encode
+new_data = pd.DataFrame.from_dict({0: new_entry}, orient='index')
+new_data_encoded = pd.get_dummies(new_data, columns=['Country', 'label'], dtype=int)
+
+# Add engineered feature
+new_data_encoded['ph_to_water_availability_ratio'] = (
+    new_data_encoded['ph'] / new_data_encoded['water_availability']
+)
+
+# Align columns
+new_data_encoded = new_data_encoded.reindex(
+    columns=one_hot_encoder_info['columns'], 
+    fill_value=0
+)
+new_data_encoded = new_data_encoded.drop('season', axis=1)
+
+# Predict
+predictions = model.predict(new_data_encoded)
+harvest_season = label_encoder.inverse_transform(predictions)[0]
+
+print(f"Predicted harvest season: {harvest_season}")
+```
+
+## Supported Crops
+
+The model supports 13 crop types with the following growth durations:
+
+| Crop | Duration (days) |
+|------|----------------|
+| Blackgram | 75 |
+| Chickpea | 105 |
+| Cotton | 165 |
+| Jute | 135 |
+| Kidneybeans | 115 |
+| Lentil | 115 |
+| Maize | 80 |
+| Mothbeans | 75 |
+| Mungbean | 75 |
+| Muskmelon | 85 |
+| Pigeonpeas | 120 |
+| Rice | 140 |
+| Watermelon | 80 |
+
+```python
+# Duration mapping from general.py
+duration = {
+    'blackgram': 75,
+    'chickpea': 105,
+    'cotton': 165,
+    'jute': 135,
+    'kidneybeans': 115,
+    'lentil': 115,
+    'maize': 80,
+    'mothbeans': 75,
+    'mungbean': 75,
+    'muskmelon': 85,
+    'pigeonpeas': 120,
+    'rice': 140,
+    'watermelon': 80
+}
+```
+
+## Model Files
+
+The harvest prediction system requires these pickle files:
+
+- `main_model_xgboost.pkl` - Trained XGBoost classifier
+- `label_encoder.pkl` - Season label encoder
+- `one_hot_encoder_info.pkl` - One-hot encoding column information
+- `crop_info.pkl` - Crop-specific optimal ranges for all factors
+
+## Integration with Other Models
+
+The harvest prediction model receives input from:
+
+1. **Soil pH Predictor** - Converts RGB soil color to pH value
+2. **Water Availability Model** - Converts RGB soil color to water availability score
+
+See the respective model documentation for details on these preprocessing steps.

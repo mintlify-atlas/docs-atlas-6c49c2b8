@@ -1,0 +1,363 @@
+---
+title: 'Recommendation Engine'
+description: 'OpenAI GPT-3.5 integration for generating farming recommendations'
+---
+
+## Overview
+
+The MavunoX Recommendation Engine uses OpenAI's GPT-3.5 Turbo API to generate custom, actionable farming recommendations for rural farmers. The engine analyzes environmental factors, compares them against crop-specific optimal ranges, and produces concise, farmer-friendly advice to improve crop yield.
+
+## Architecture
+
+### Model Integration
+- **Model**: GPT-3.5 Turbo
+- **API**: OpenAI Chat Completions
+- **Response Length**: 55 words (strictly enforced)
+- **Output Format**: Block of text, simplified for rural farmers
+
+## Implementation
+
+### Core Function
+
+```python
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+api_key = os.getenv('OPENAI_API_KEY')
+
+client = OpenAI(api_key=api_key)
+
+def rec_gen(factor, min, max, value, unit, crop):
+    """
+    Generate farming recommendation using GPT-3.5 Turbo.
+    
+    Args:
+        factor (str): Environmental factor (e.g., "Temperature", "pH")
+        min (float): Minimum recommended value
+        max (float): Maximum recommended value
+        value (float): Current measured value
+        unit (str): Unit of measurement (e.g., "Celsius", "mm")
+        crop (str): Target crop name
+    
+    Returns:
+        str: Recommendation text (55 words)
+    """
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system", 
+                "content": "You are a recommender for rural farmers. only use block of text in 55 words strictly and make responses dynamic"
+            },
+            {
+                "role": "user", 
+                "content": f"Provide a recommendation to improve yield based on {factor}. The recommended {factor} is {min}-{max} {unit}, and the farm is currently at {value} {unit}. In just 55 words, assess if the current {factor} is suitable for optimal yield and add strategies to improve yield specific for the crop {crop}, recommendation should be block of text and simplified, approximate to 2 decimal places for all numbers in responds"
+            }
+        ]
+    )
+    return completion.choices[0].message.content
+```
+
+## Input/Output Specification
+
+<ParamField path="input.factor" type="string" required>
+  Environmental factor name (Temperature, Humidity, pH, Water Availability)
+</ParamField>
+
+<ParamField path="input.min" type="float" required>
+  Minimum value in optimal range for the crop
+</ParamField>
+
+<ParamField path="input.max" type="float" required>
+  Maximum value in optimal range for the crop
+</ParamField>
+
+<ParamField path="input.value" type="float" required>
+  Current measured value on the farm
+</ParamField>
+
+<ParamField path="input.unit" type="string" required>
+  Unit of measurement (e.g., Celsius, %, mm)
+</ParamField>
+
+<ParamField path="input.crop" type="string" required>
+  Target crop name (must be one of 13 supported crops)
+</ParamField>
+
+<ParamField path="output.recommendation" type="string">
+  Generated recommendation text (55 words, block format)
+</ParamField>
+
+## Usage Examples
+
+### Temperature Recommendation
+
+```python
+recommendation = rec_gen(
+    factor="Temperature",
+    min=25.5,
+    max=30.0,
+    value=28.2,
+    unit="Celsius",
+    crop="Rice"
+)
+
+print(recommendation)
+# Example output:
+# "Your current temperature of 28.20°C is within the optimal range of 25.50-30.00°C 
+# for rice cultivation. Maintain this temperature through proper irrigation timing. 
+# Consider shade nets if temperatures rise. Monitor daily fluctuations and adjust 
+# water management. Good temperature control supports healthy grain development and 
+# maximizes rice yield potential."
+```
+
+### pH Recommendation
+
+```python
+recommendation = rec_gen(
+    factor="pH",
+    min=6.0,
+    max=7.0,
+    value=5.2,
+    unit="",
+    crop="Maize"
+)
+
+print(recommendation)
+# Example output:
+# "Your soil pH of 5.20 is below the optimal range of 6.00-7.00 for maize. Apply 
+# agricultural lime at 2-3 tons per hectare to raise pH. Test soil again after 3 
+# months. Consider dolomitic lime for added magnesium. Proper pH improves nutrient 
+# availability and maize growth significantly."
+```
+
+### Humidity Recommendation
+
+```python
+recommendation = rec_gen(
+    factor="Humidity",
+    min=60.0,
+    max=80.0,
+    value=92.5,
+    unit="%",
+    crop="Cotton"
+)
+
+print(recommendation)
+# Example output:
+# "Your humidity of 92.50% exceeds the optimal 60.00-80.00% range for cotton. 
+# High humidity increases disease risk. Improve air circulation through proper 
+# plant spacing. Avoid overhead irrigation. Apply fungicides preventatively. 
+# Consider drainage improvements. Reducing humidity protects cotton from boll 
+# rot and other moisture-related diseases."
+```
+
+### Water Availability Recommendation
+
+```python
+recommendation = rec_gen(
+    factor="Water Availability",
+    min=150.0,
+    max=200.0,
+    value=85.0,
+    unit="mm",
+    crop="Chickpea"
+)
+
+print(recommendation)
+# Example output:
+# "Your water availability of 85.00mm is below the optimal 150.00-200.00mm for 
+# chickpea. Increase irrigation frequency to meet crop water needs. Install drip 
+# irrigation for efficiency. Mulch to reduce evaporation. Monitor soil moisture 
+# regularly. Adequate water during flowering and pod formation is critical for 
+# chickpea yield."
+```
+
+## Recommendation System
+
+### Status Calculation
+
+Before generating recommendations, MavunoX calculates whether current values are within acceptable ranges:
+
+```python
+def calc_status(value, value_range):
+    """
+    Check if value is within acceptable range.
+    
+    Args:
+        value (float): Current measured value
+        value_range (list): [min, max] acceptable range
+    
+    Returns:
+        int: 1 if within range, 0 if outside
+    """
+    if value >= value_range[0] and value <= value_range[1]:
+        status = 1
+    else:
+        status = 0
+    return status
+```
+
+### Scale Calculation
+
+Calculates how close the current value is to optimal using Gaussian function:
+
+```python
+import math
+
+def calc_scale(actual_number, input_number, k):
+    """
+    Calculate proximity to optimal value (0-100 scale).
+    
+    Args:
+        actual_number (float): Current value
+        input_number (float): Optimal value
+        k (float): Sensitivity parameter
+    
+    Returns:
+        float: Score from 0-100 (100 = optimal)
+    """
+    absolute_difference = abs(actual_number - input_number)
+    scale_value = 100 * math.exp(-k * absolute_difference**2)
+    return scale_value
+```
+
+### Sensitivity Parameters by Factor
+
+```python
+# From general.py - k values for each factor
+sensitivity = {
+    'temperature': 0.04,      # More sensitive to temperature changes
+    'humidity': 0.0015,       # Less sensitive to humidity changes
+    'ph': 0.6,                # Very sensitive to pH changes
+    'water_availability': 0.00025  # Least sensitive to water changes
+}
+```
+
+## API Endpoints Integration
+
+The recommendation engine is exposed through FastAPI endpoints:
+
+### Temperature Endpoint
+```
+POST /recommendations/temperature
+Body: {"min": 25.5, "max": 30.0, "value": 28.2, "crop": "rice"}
+```
+
+### Humidity Endpoint
+```
+POST /recommendations/humidity
+Body: {"min": 60.0, "max": 80.0, "value": 92.5, "crop": "cotton"}
+```
+
+### pH Endpoint
+```
+POST /recommendations/ph
+Body: {"min": 6.0, "max": 7.0, "value": 5.2, "crop": "maize"}
+```
+
+### Water Availability Endpoint
+```
+POST /recommendations/water
+Body: {"min": 150.0, "max": 200.0, "value": 85.0, "crop": "chickpea"}
+```
+
+## Configuration
+
+### Environment Setup
+
+```bash
+# .env file
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+### Dependencies
+
+```python
+# requirements.txt
+openai>=1.0.0
+python-dotenv>=1.0.0
+```
+
+## Recommendation Characteristics
+
+### Design Principles
+
+1. **Brevity**: Strict 55-word limit for easy comprehension
+2. **Simplicity**: Language tailored for rural farmers
+3. **Actionable**: Specific strategies, not just analysis
+4. **Crop-Specific**: Recommendations tailored to target crop
+5. **Dynamic**: GPT generates unique responses based on input
+6. **Precision**: Numbers rounded to 2 decimal places
+
+### Response Format
+
+Each recommendation includes:
+- Current value assessment
+- Comparison to optimal range
+- Specific action items
+- Expected benefits
+- Crop-specific considerations
+
+## Supported Crops
+
+The recommendation engine supports all 13 MavunoX crops:
+
+- Blackgram
+- Chickpea
+- Cotton
+- Jute
+- Kidneybeans
+- Lentil
+- Maize
+- Mothbeans
+- Mungbean
+- Muskmelon
+- Pigeonpeas
+- Rice
+- Watermelon
+
+## Best Practices
+
+### API Usage
+
+- Store API key securely in environment variables
+- Implement rate limiting to avoid OpenAI quota issues
+- Cache recommendations for identical inputs
+- Handle API errors gracefully
+- Monitor API usage and costs
+
+### Prompt Engineering
+
+- System prompt enforces 55-word limit strictly
+- User prompt provides all context in single message
+- Request simplified language for accessibility
+- Specify number formatting (2 decimal places)
+- Emphasize crop-specific strategies
+
+## Error Handling
+
+```python
+import openai
+
+def rec_gen_safe(factor, min, max, value, unit, crop):
+    """Recommendation generator with error handling."""
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[...]
+        )
+        return completion.choices[0].message.content
+    except openai.RateLimitError:
+        return "Service temporarily unavailable. Please try again."
+    except openai.APIError as e:
+        return f"API error: {str(e)}"
+    except Exception as e:
+        return "Unable to generate recommendation. Please contact support."
+```
+
+## Compliance
+
+This implementation follows OpenAI's usage policies and guidelines. For detailed API documentation, refer to the [OpenAI API documentation](https://platform.openai.com/docs/).

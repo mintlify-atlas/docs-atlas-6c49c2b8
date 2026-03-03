@@ -1,0 +1,266 @@
+---
+title: Recommendation Endpoints
+description: AI-powered crop yield optimization recommendations
+---
+
+## Overview
+
+The recommendation endpoints use OpenAI's GPT-3.5-turbo model to generate personalized, actionable recommendations for farmers based on their current environmental conditions and optimal ranges for their chosen crop.
+
+All recommendation endpoints accept the same request schema and return AI-generated text recommendations.
+
+## Common Request Schema
+
+All recommendation endpoints use the `FarmData` model:
+
+<ParamField body="min" type="float" required>
+  Minimum recommended value for the environmental factor
+</ParamField>
+
+<ParamField body="max" type="float" required>
+  Maximum recommended value for the environmental factor
+</ParamField>
+
+<ParamField body="value" type="float" required>
+  Current measured value on the farm
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type (e.g., "rice", "maize", "cotton")
+</ParamField>
+
+## Temperature Recommendations
+
+<CodeGroup>
+```bash POST /api/recommedations/temperature
+curl -X POST http://localhost:8000/api/recommedations/temperature \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 20.0,
+    "max": 30.0,
+    "value": 35.0,
+    "label": "rice"
+  }'
+```
+</CodeGroup>
+
+Generates temperature-based recommendations for crop yield optimization.
+
+### Request Body
+
+<ParamField body="min" type="float" required>
+  Minimum optimal temperature in °C
+</ParamField>
+
+<ParamField body="max" type="float" required>
+  Maximum optimal temperature in °C
+</ParamField>
+
+<ParamField body="value" type="float" required>
+  Current farm temperature in °C
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being grown
+</ParamField>
+
+### Response
+
+<ResponseField name="response" type="string">
+  AI-generated recommendation text (approximately 55 words) with strategies to improve yield based on temperature conditions
+</ResponseField>
+
+**Example Response:**
+```json
+"The current temperature of 35.00°C exceeds the recommended range of 20.00-30.00°C for rice. This excess heat can stress plants and reduce yield. To improve conditions, consider using shade nets to reduce direct sunlight, increase irrigation frequency to cool the soil, and plant heat-tolerant rice varieties. Mulching can also help regulate soil temperature effectively."
+```
+
+## Humidity Recommendations
+
+<CodeGroup>
+```bash POST /api/recommedations/humidity
+curl -X POST http://localhost:8000/api/recommedations/humidity \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 60.0,
+    "max": 80.0,
+    "value": 45.0,
+    "label": "maize"
+  }'
+```
+</CodeGroup>
+
+Generates humidity-based recommendations for crop yield optimization.
+
+### Request Body
+
+<ParamField body="min" type="float" required>
+  Minimum optimal humidity in %
+</ParamField>
+
+<ParamField body="max" type="float" required>
+  Maximum optimal humidity in %
+</ParamField>
+
+<ParamField body="value" type="float" required>
+  Current farm humidity in %
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being grown
+</ParamField>
+
+### Response
+
+<ResponseField name="response" type="string">
+  AI-generated recommendation text (approximately 55 words) with strategies to improve yield based on humidity conditions
+</ResponseField>
+
+**Example Response:**
+```json
+"Your farm's humidity of 45.00% is below the optimal 60.00-80.00% range for maize. Low humidity can cause water stress and reduce photosynthesis. To increase humidity, implement drip irrigation systems, use misting during dry periods, plant windbreaks to reduce moisture loss, and apply organic mulch to retain soil moisture and create a humid microclimate."
+```
+
+## Soil pH Recommendations
+
+<CodeGroup>
+```bash POST /api/recommedations/ph
+curl -X POST http://localhost:8000/api/recommedations/ph \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 5.5,
+    "max": 7.0,
+    "value": 8.2,
+    "label": "chickpea"
+  }'
+```
+</CodeGroup>
+
+Generates pH-based recommendations for crop yield optimization.
+
+### Request Body
+
+<ParamField body="min" type="float" required>
+  Minimum optimal pH value
+</ParamField>
+
+<ParamField body="max" type="float" required>
+  Maximum optimal pH value
+</ParamField>
+
+<ParamField body="value" type="float" required>
+  Current soil pH value
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being grown
+</ParamField>
+
+### Response
+
+<ResponseField name="response" type="string">
+  AI-generated recommendation text (approximately 55 words) with strategies to improve yield based on pH conditions
+</ResponseField>
+
+**Example Response:**
+```json
+"Your soil pH of 8.20 is above the recommended 5.50-7.00 range for chickpea. Alkaline soil can limit nutrient availability. To lower pH, apply sulfur or aluminum sulfate, use acidic organic matter like pine needles or peat moss, and consider growing acid-loving cover crops. Regular pH testing will help monitor improvements."
+```
+
+## Water Availability Recommendations
+
+<CodeGroup>
+```bash POST /api/recommedations/water_availability
+curl -X POST http://localhost:8000/api/recommedations/water_availability \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 100.0,
+    "max": 200.0,
+    "value": 50.0,
+    "label": "cotton"
+  }'
+```
+</CodeGroup>
+
+Generates water availability recommendations for crop yield optimization.
+
+### Request Body
+
+<ParamField body="min" type="float" required>
+  Minimum optimal water availability in mm
+</ParamField>
+
+<ParamField body="max" type="float" required>
+  Maximum optimal water availability in mm
+</ParamField>
+
+<ParamField body="value" type="float" required>
+  Current water availability in mm
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being grown
+</ParamField>
+
+### Response
+
+<ResponseField name="response" type="string">
+  AI-generated recommendation text (approximately 55 words) with strategies to improve yield based on water availability
+</ResponseField>
+
+**Example Response:**
+```json
+"Water availability of 50.00mm is below the optimal 100.00-200.00mm range for cotton. Insufficient water can severely impact yield. Install efficient irrigation systems like drip or sprinkler irrigation, harvest rainwater in storage tanks, use drought-resistant cotton varieties, and apply mulch to reduce evaporation and conserve soil moisture effectively."
+```
+
+## Implementation Details
+
+The recommendation engine (`recommendation_engine.py:9`) uses the following logic:
+
+1. Accepts factor name, min/max range, current value, unit, and crop type
+2. Sends a request to OpenAI's GPT-3.5-turbo model with a system prompt optimized for rural farmers
+3. Generates a dynamic, 55-word recommendation block
+4. Returns simplified, actionable strategies specific to the crop
+5. All numeric values in responses are approximated to 2 decimal places
+
+<Note>
+**API Key Required:** These endpoints require an OpenAI API key configured in the `.env` file as `OPENAI_API_KEY`. Without this key, the recommendation endpoints will fail.
+</Note>
+
+## Supported Crops
+
+All recommendation endpoints support the following crop labels:
+
+- blackgram
+- chickpea
+- cotton
+- jute
+- kidneybeans
+- lentil
+- maize
+- mothbeans
+- mungbean
+- muskmelon
+- pigeonpeas
+- rice
+- watermelon
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Accurate Ranges">
+    Ensure that the `min` and `max` values you provide match the optimal ranges for your specific crop. Inaccurate ranges will result in misleading recommendations.
+  </Accordion>
+  
+  <Accordion title="Current Value Measurement">
+    The `value` parameter should reflect actual measurements from your farm using calibrated sensors or testing equipment.
+  </Accordion>
+  
+  <Accordion title="Crop Label Format">
+    Crop labels must be lowercase and match the supported crop list exactly (e.g., "kidneybeans" not "kidney beans" or "Kidneybeans").
+  </Accordion>
+  
+  <Accordion title="Interpretation">
+    Recommendations are AI-generated and should be interpreted as suggestions. Always consult with local agricultural experts before making significant changes to farming practices.
+  </Accordion>
+</AccordionGroup>

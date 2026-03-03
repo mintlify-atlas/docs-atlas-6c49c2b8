@@ -1,0 +1,161 @@
+---
+title: Data Preprocessing
+description: Feature engineering and data transformation pipeline for MavunoX models
+---
+
+## Overview
+
+MavunoX employs a comprehensive data preprocessing pipeline that transforms raw agricultural and soil color data into features suitable for XGBoost models. The preprocessing includes RGB-based feature extraction, ratio calculations, and categorical encoding.
+
+## Main Model Preprocessing
+
+### Initial Data Cleaning
+
+The following columns are removed during preprocessing:
+
+- **harvest season** - Removed as it's not needed for prediction
+- **temperature** - Excluded to prevent data leakage
+
+### Feature Engineering
+
+A key engineered feature is created to capture the relationship between soil pH and water availability:
+
+```python
+ph_to_water_availability_ratio = ph / water_availability
+```
+
+This ratio provides additional insights into soil conditions and their impact on crop growth.
+
+### Categorical Encoding
+
+#### Label Encoding
+
+The target variable `season` is label-encoded for compatibility with XGBoost:
+
+```python
+# Load label encoder
+label_encoder_path = 'ML_Models/label_encoder.pkl'
+with open(label_encoder_path, 'rb') as label_encoder_file:
+    label_encoder = pickle.load(label_encoder_file)
+
+# Inverse transform predictions back to season names
+predictions_words = label_encoder.inverse_transform(predictions)
+```
+
+#### One-Hot Encoding
+
+Categorical variables are one-hot encoded to create binary features:
+
+```python
+# One-hot encode 'Country' and 'label' (crop type)
+new_data_encoded = pd.get_dummies(new_data, columns=['Country', 'label'], dtype=int)
+
+# Ensure columns match training data
+new_data_encoded = new_data_encoded.reindex(
+    columns=one_hot_encoder_info['columns'], 
+    fill_value=0
+)
+```
+
+**Encoded Variables:**
+- `Country` - Geographic location (Nigeria, South Africa, Kenya, Sudan)
+- `label` - Crop type (maize, rice, cotton, etc.)
+
+## Soil pH Model Preprocessing
+
+### RGB Color Features
+
+The soil pH predictor transforms RGB values into multiple color-related features:
+
+#### Ratio Calculations
+
+```python
+rgb_data['R/G'] = rgb_data['R'] / rgb_data['G']
+rgb_data['G/B'] = rgb_data['G'] / rgb_data['B']
+rgb_data['R/B'] = rgb_data['R'] / rgb_data['B']
+```
+
+#### Hue Conversion
+
+RGB values are converted to hue using a custom function:
+
+```python
+def rgb_to_hue(rgb):
+    rgb = rgb / 255.0
+    max_rgb = rgb.max(axis=1)
+    min_rgb = rgb.min(axis=1)
+    delta = max_rgb - min_rgb
+    hue = np.zeros_like(max_rgb)
+    non_zero_delta = delta != 0
+    hue[non_zero_delta] = np.select(
+        [max_rgb == rgb[:, 0], max_rgb == rgb[:, 1], max_rgb == rgb[:, 2]],
+        [
+            (rgb[:, 1] - rgb[:, 2]) / delta,
+            2 + (rgb[:, 2] - rgb[:, 0]) / delta,
+            4 + (rgb[:, 0] - rgb[:, 1]) / delta
+        ]
+    )
+    hue = (hue * 60) % 360
+    return hue
+
+rgb_data['hue'] = rgb_to_hue(rgb_data[['R', 'G', 'B']].values)
+```
+
+#### Saturation and Brightness
+
+Additional color features are extracted using the HSV color space:
+
+```python
+rgb_data['Saturation'] = rgb_data.apply(
+    lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[1], 
+    axis=1
+)
+
+rgb_data['Brightness'] = rgb_data.apply(
+    lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[2], 
+    axis=1
+)
+```
+
+**Final Feature Set for Soil pH Model:**
+- R, G, B (original RGB values)
+- R/G, G/B, R/B (color ratios)
+- Hue (color angle, 0-360 degrees)
+- Saturation (color purity)
+- Brightness (color intensity)
+
+## Water Availability Preprocessing
+
+### Grayscale Conversion
+
+RGB values are converted to grayscale using weighted coefficients:
+
+```python
+gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+```
+
+### Linear Interpolation
+
+The grayscale value is transformed into a water availability score:
+
+```python
+water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+```
+
+This formula maps grayscale values from the range [0.12, 0.65] to water availability scores from [25, 250].
+
+## Data Pipeline Summary
+
+1. **Input Processing**: RGB values from soil images
+2. **Color Feature Extraction**: Ratios, hue, saturation, brightness
+3. **Model Prediction**: Soil pH and water availability
+4. **Feature Engineering**: pH-to-water ratio
+5. **Categorical Encoding**: One-hot encoding for country and crop
+6. **Model Input**: Final feature vector for harvest season prediction
+
+## Implementation Notes
+
+- All preprocessing steps are deterministic and reproducible
+- Feature scaling is handled internally by XGBoost
+- Missing columns are filled with 0 during one-hot encoding alignment
+- RGB values are normalized to [0, 1] range for color space conversions

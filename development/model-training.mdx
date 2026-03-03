@@ -1,0 +1,209 @@
+---
+title: Model Training
+description: XGBoost training process and hyperparameters for MavunoX models
+---
+
+## Overview
+
+MavunoX uses XGBoost (eXtreme Gradient Boosting) for all three predictive models: the main harvest season predictor, soil pH predictor, and water availability estimation. XGBoost was chosen for its excellent performance on tabular data and ability to handle complex feature interactions.
+
+## Main Model: Harvest Season Predictor
+
+### Model Architecture
+
+The main model uses XGBoost Classifier to predict harvest seasons based on environmental factors:
+
+```python
+from xgboost import XGBClassifier
+
+# Load trained model
+main_model_path = 'ML_Models/main_model_xgboost.pkl'
+with open(main_model_path, 'rb') as main_model_file:
+    model = pickle.load(main_model_file)
+```
+
+### Training Data
+
+The dataset was sourced from the [Klusterthon Hackathon](https://www.kluster.africa/problem-statements/precision-farming-for-best-product-results-with-data) and includes:
+
+**Features:**
+- pH (soil acidity/alkalinity)
+- Water availability
+- Country (one-hot encoded: Nigeria, South Africa, Kenya, Sudan)
+- Crop type (one-hot encoded: maize, rice, cotton, etc.)
+- pH-to-water availability ratio (engineered feature)
+
+**Target Variable:**
+- Season (encoded as 0, 1, 2, 3 representing different harvest seasons)
+
+### Data Distribution
+
+Key observations from exploratory data analysis:
+
+- **Most Common Season**: Rainy season dominates the dataset
+- **Dominant Crop**: Maize is the most frequently occurring crop
+- **Regional Concentration**: Majority of data originates from Nigeria
+
+### Training Process
+
+1. **Label Encoding**: Target variable `season` is label-encoded
+2. **Train-Test Split**: Data split into training and testing sets
+3. **Model Training**: XGBoost classifier trained on encoded features
+4. **Model Persistence**: Trained model saved as pickle file
+
+```python
+# Training workflow
+# 1. Encode target variable
+from sklearn.preprocessing import LabelEncoder
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(df['season'])
+
+# 2. Split data
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2)
+
+# 3. Train XGBoost model
+model = XGBClassifier()
+model.fit(X_train, y_train)
+
+# 4. Save model and encoders
+import pickle
+with open('ML_Models/main_model_xgboost.pkl', 'wb') as f:
+    pickle.dump(model, f)
+```
+
+## Soil pH Predictor Model
+
+### Model Architecture
+
+The soil pH model uses XGBoost Regressor instead of a neural network (as proposed in the original research paper):
+
+```python
+from xgboost import XGBRegressor
+
+# Load soil pH model
+soil_model_path = 'ML_Models/soil_colour_model.pkl'
+with open(soil_model_path, 'rb') as soil_model_file:
+    soil_model = pickle.load(soil_model_file)
+```
+
+### Training Data
+
+Dataset derived from research paper: ["Determine the pH of Soil by Using Neural Network Based on Soil's Colour"](https://www.researchgate.net/publication/336681057_Determine_the_pH_of_Soil_by_Using_Neural_Network_Based_on_Soil's_Colour)
+
+**Features:**
+- R, G, B (RGB color values)
+- R/G, G/B, R/B (color ratios)
+- Hue (0-360 degrees)
+- Saturation
+- Brightness
+
+**Target Variable:**
+- Soil pH (continuous value)
+
+### Training Approach
+
+The model uses gradient boosting regression to predict soil pH from color features:
+
+```python
+# Prediction example
+soil_pH = soil_model.predict(rgb_data)[0]
+```
+
+The XGBoost regressor was chosen over the neural network approach in the original paper for:
+- Better performance on small tabular datasets
+- Faster training and inference
+- Built-in handling of feature interactions
+- Robustness to overfitting
+
+## Hyperparameters
+
+### XGBoost Classifier (Main Model)
+
+While specific hyperparameters are not exposed in the deployment code, XGBoost provides several key parameters:
+
+**Common Hyperparameters:**
+- `max_depth` - Maximum tree depth (controls model complexity)
+- `learning_rate` - Step size shrinkage (prevents overfitting)
+- `n_estimators` - Number of boosting rounds
+- `subsample` - Fraction of samples used per tree
+- `colsample_bytree` - Fraction of features used per tree
+- `objective` - Learning task (multi:softmax for classification)
+
+### XGBoost Regressor (Soil pH Model)
+
+**Regression-Specific Parameters:**
+- `objective` - Regression objective (reg:squarederror)
+- `eval_metric` - Evaluation metric (RMSE for regression)
+
+## Model Persistence
+
+All trained models and preprocessing objects are saved using Python's pickle module:
+
+**Saved Artifacts:**
+- `main_model_xgboost.pkl` - Main harvest season classifier
+- `soil_colour_model.pkl` - Soil pH regressor
+- `label_encoder.pkl` - Target variable encoder
+- `one_hot_encoder_info.pkl` - Column information for encoding
+- `crop_info.pkl` - Crop-specific parameter ranges
+
+```python
+# Loading models in production
+import pickle
+
+with open(main_model_path, 'rb') as main_model_file:
+    model = pickle.load(main_model_file)
+
+with open(label_encoder_path, 'rb') as label_encoder_file:
+    label_encoder = pickle.load(label_encoder_file)
+```
+
+## Prediction Pipeline
+
+### End-to-End Workflow
+
+1. **Input**: RGB values from soil image
+2. **Soil Analysis**: Extract soil pH and water availability
+3. **Feature Preparation**: Create encoded feature vector
+4. **Prediction**: XGBoost predicts encoded season
+5. **Decoding**: Label encoder converts to season name
+
+```python
+def get_HarvestSeason(soil_pH, water_availability, label, country):
+    # Create feature dictionary
+    new_entry = {
+        'ph': soil_pH,
+        'water_availability': water_availability,
+        'label': label,
+        'Country': country
+    }
+    
+    # Convert to DataFrame and encode
+    new_data = pd.DataFrame.from_dict({0: new_entry}, orient='index')
+    new_data_encoded = pd.get_dummies(new_data, columns=['Country', 'label'], dtype=int)
+    new_data_encoded['ph_to_water_availability_ratio'] = (
+        new_data_encoded['ph'] / new_data_encoded['water_availability']
+    )
+    
+    # Align columns with training data
+    new_data_encoded = new_data_encoded.reindex(
+        columns=one_hot_encoder_info['columns'], 
+        fill_value=0
+    )
+    new_data_encoded = new_data_encoded.drop('season', axis=1)
+    
+    # Predict and decode
+    predictions = model.predict(new_data_encoded)
+    predictions_words = label_encoder.inverse_transform(predictions)
+    
+    return predictions_words[0]
+```
+
+## Training Best Practices
+
+- **Data Quality**: Ensure balanced representation across seasons, crops, and regions
+- **Feature Engineering**: Create domain-specific features (pH-to-water ratio)
+- **Cross-Validation**: Use k-fold CV to assess generalization (see Evaluation)
+- **Model Selection**: XGBoost chosen for tabular data performance
+- **Hyperparameter Tuning**: Optimize parameters using validation set
+- **Model Versioning**: Track model versions and performance metrics

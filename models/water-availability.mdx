@@ -1,0 +1,236 @@
+---
+title: 'Water Availability Estimator'
+description: 'Formula-based model for estimating water availability from soil grayscale values'
+---
+
+## Overview
+
+The Water Availability Model estimates water availability based on the grayscale representation of soil color. The model assumes a correlation between soil color and water content, using a linear interpolation approach to convert grayscale values into water availability scores.
+
+<Note>
+This is a simple formula-based approach. Ongoing research is being conducted to enhance and refine the model with more sophisticated techniques.
+</Note>
+
+## Model Architecture
+
+### Algorithm
+- **Model Type**: Formula-based (not ML)
+- **Approach**: Linear interpolation on grayscale values
+- **Input**: RGB color values
+- **Output**: Water availability score (25-250 range)
+
+## Mathematical Formula
+
+### Step 1: Grayscale Conversion
+
+The model converts RGB values to grayscale using standard luminosity weights:
+
+```python
+gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+```
+
+**Coefficients**:
+- **Red (R)**: 0.299
+- **Green (G)**: 0.582
+- **Blue (B)**: 0.114
+
+These weights reflect human perception of color brightness, with green having the highest weight.
+
+### Step 2: Linear Interpolation
+
+The grayscale value is mapped to water availability using linear interpolation:
+
+```python
+water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+```
+
+**Parameters**:
+- **Minimum water availability**: 25
+- **Maximum water availability**: 250
+- **Lower grayscale bound**: 0.12
+- **Upper grayscale bound**: 0.65
+
+## Input/Output Specification
+
+<ParamField path="input.R" type="int" required>
+  Red color channel (0-255)
+</ParamField>
+
+<ParamField path="input.G" type="int" required>
+  Green color channel (0-255)
+</ParamField>
+
+<ParamField path="input.B" type="int" required>
+  Blue color channel (0-255)
+</ParamField>
+
+<ParamField path="output.water_availability" type="float">
+  Estimated water availability score (25-250 range)
+</ParamField>
+
+## Usage Example
+
+```python
+def calculate_water_availability(R, G, B):
+    """
+    Calculate water availability from RGB soil color values.
+    
+    Args:
+        R (int): Red channel value (0-255)
+        G (int): Green channel value (0-255)
+        B (int): Blue channel value (0-255)
+    
+    Returns:
+        float: Water availability score (25-250)
+    """
+    # Step 1: Convert to grayscale
+    gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+    
+    # Step 2: Linear interpolation to water availability
+    water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+    
+    return water_availability
+
+# Example usage
+R, G, B = 120, 85, 60  # Dark brown soil
+water_avail = calculate_water_availability(R, G, B)
+print(f"Water availability: {water_avail:.2f}")
+```
+
+## Formula Breakdown
+
+### Grayscale Range Interpretation
+
+| Grayscale Value | Soil Appearance | Water Availability |
+|----------------|-----------------|--------------------|
+| 0.12 (minimum) | Light colored   | 25 (dry)          |
+| 0.65 (maximum) | Dark colored    | 250 (saturated)   |
+| 0.38 (middle)  | Medium brown    | ~137 (moderate)   |
+
+### Why Grayscale Correlates with Water
+
+Darker soil typically indicates:
+- Higher moisture content
+- More organic matter
+- Better water retention
+- Recent rainfall or irrigation
+
+Lighter soil suggests:
+- Lower moisture content
+- Drier conditions
+- Sandy or depleted soil
+
+## Complete Implementation
+
+From `general.py`, the water availability calculation is part of the `get_SoilProfile()` function:
+
+```python
+def get_SoilProfile(R, G, B):
+    """
+    Returns both soil pH and water availability from RGB values.
+    
+    Args:
+        R (int): Red channel (0-255)
+        G (int): Green channel (0-255)
+        B (int): Blue channel (0-255)
+    
+    Returns:
+        tuple: (soil_pH, water_availability)
+    """
+    # ... [pH prediction code] ...
+    
+    # Calculate grayscale
+    gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+    
+    # Linear interpolation for water availability
+    water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+    
+    return soil_pH, water_availability
+```
+
+## Edge Cases
+
+### Out of Bounds Grayscale
+
+If the grayscale value falls outside [0.12, 0.65]:
+
+- **< 0.12**: Formula will return values < 25 (very dry soil)
+- **> 0.65**: Formula will return values > 250 (oversaturated)
+
+The model does not clip these values, allowing for extreme readings.
+
+### Example Calculations
+
+```python
+# Very light soil (sandy/dry)
+R, G, B = 200, 180, 160
+gray = 1 - ((200*0.299 + 180*0.582 + 160*0.114) / 255)  # ~0.26
+water = 25 + ((0.26 - 0.12) * 225) / 0.53  # ~84.4
+
+# Dark soil (moist)
+R, G, B = 60, 50, 40
+gray = 1 - ((60*0.299 + 50*0.582 + 40*0.114) / 255)  # ~0.79
+water = 25 + ((0.79 - 0.12) * 225) / 0.53  # ~309.4
+
+# Medium brown soil
+R, G, B = 120, 85, 60
+gray = 1 - ((120*0.299 + 85*0.582 + 60*0.114) / 255)  # ~0.62
+water = 25 + ((0.62 - 0.12) * 225) / 0.53  # ~237.3
+```
+
+## Integration with Harvest Prediction
+
+The water availability score is used in multiple ways:
+
+### 1. Direct Model Input
+
+```python
+harvest_season = get_HarvestSeason(
+    soil_pH=6.5, 
+    water_availability=180.5,  # From this model
+    label='rice',
+    country='Nigeria'
+)
+```
+
+### 2. Crop Suitability Assessment
+
+```python
+# Check if water availability is within crop's optimal range
+water_status = calc_status(
+    water_avail, 
+    [crop_info[label]['water availability']['min'],
+     crop_info[label]['water availability']['max']]
+)
+```
+
+### 3. Recommendation Scoring
+
+```python
+# Calculate how close to optimal for the crop
+water_scale = calc_scale(
+    water_avail, 
+    crop_info[label]['water availability']['opt'], 
+    0.00025  # Sensitivity parameter
+)
+```
+
+## Future Enhancements
+
+Planned improvements to the water availability model:
+
+1. **Machine Learning Integration**: Replace linear formula with trained model
+2. **Additional Features**: Incorporate soil texture, temperature, humidity
+3. **Temporal Data**: Account for seasonal variations and weather patterns
+4. **Sensor Validation**: Calibrate against actual soil moisture sensors
+5. **Regional Calibration**: Adjust parameters for different geographic regions
+
+## Limitations
+
+- **Simplistic approach**: Linear interpolation may not capture complex relationships
+- **RGB limitations**: Camera quality and lighting affect color readings
+- **No temporal context**: Doesn't account for recent rainfall or irrigation
+- **Single dimension**: Only uses grayscale, ignoring other color properties
+- **No soil type**: Doesn't consider clay, sand, or loam differences
+
+Despite these limitations, the model provides a reasonable first-order estimate for water availability when direct measurement isn't available.

@@ -1,0 +1,238 @@
+---
+title: Model Evaluation
+description: Performance metrics, cross-validation results, and accuracy assessment
+---
+
+## Overview
+
+MavunoX models are evaluated using industry-standard metrics appropriate for each task: classification metrics for the main harvest season predictor and regression metrics for the soil pH model.
+
+## Main Model Evaluation
+
+### Test Set Performance
+
+The XGBoost harvest season classifier achieved strong performance on the held-out test set:
+
+**Overall Accuracy: 89%**
+
+### Detailed Classification Metrics
+
+| Class | Precision | Recall | F1-Score | Support |
+|-------|-----------|--------|----------|---------|
+| 0     | 0.85      | 0.90   | 0.88     | 117     |
+| 1     | 1.00      | 1.00   | 1.00     | 20      |
+| 2     | 1.00      | 1.00   | 1.00     | 62      |
+| 3     | 0.84      | 0.78   | 0.81     | 81      |
+
+**Aggregate Metrics:**
+- **Macro Avg Precision**: 92%
+- **Macro Avg Recall**: 92%
+- **Macro Avg F1-Score**: 92%
+
+### Metric Interpretation
+
+#### Precision
+Measures the accuracy of positive predictions. High precision (92% macro avg) indicates that when the model predicts a specific season, it's usually correct.
+
+#### Recall
+Measures the ability to find all positive instances. High recall (92% macro avg) shows the model successfully identifies most instances of each season.
+
+#### F1-Score
+Harmonic mean of precision and recall. The 92% macro average indicates balanced performance across all season classes.
+
+#### Support
+Number of actual occurrences of each class in the test set. Note the class imbalance:
+- Class 0: 117 samples (most common)
+- Class 1: 20 samples (least common)
+- Class 2: 62 samples
+- Class 3: 81 samples
+
+### Performance by Class
+
+**Perfect Performance (Classes 1 & 2):**
+Classes 1 and 2 achieved perfect precision, recall, and F1-scores of 1.00, suggesting these seasons have very distinct environmental signatures.
+
+**Strong Performance (Class 0):**
+Class 0 shows excellent results with 0.90 recall and 0.85 precision, indicating reliable predictions despite being the most common class.
+
+**Good Performance (Class 3):**
+Class 3 has slightly lower metrics (0.78 recall, 0.84 precision) but still demonstrates strong predictive capability.
+
+## Soil pH Model Evaluation
+
+### Cross-Validation Approach
+
+The soil pH predictor was evaluated using k-fold cross-validation to ensure robust performance estimates:
+
+**Evaluation Metric: Root Mean Squared Error (RMSE)**
+
+### Cross-Validation Results
+
+**Average RMSE: 0.7049**
+
+This value represents the average RMSE across all cross-validation folds, indicating the typical prediction error in pH units.
+
+### RMSE Interpretation
+
+Root Mean Squared Error measures the standard deviation of prediction errors:
+
+```python
+import numpy as np
+
+# RMSE calculation
+rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+```
+
+An RMSE of 0.7049 means:
+- Average prediction error is approximately ±0.7 pH units
+- For soil pH typically ranging from 4-9, this represents ~10-15% relative error
+- Predictions are sufficiently accurate for agricultural decision-making
+
+### Cross-Validation Benefits
+
+**Why K-Fold Cross-Validation?**
+
+1. **Robust Estimates**: Averages performance across multiple train-test splits
+2. **Efficient Data Use**: All data used for both training and validation
+3. **Variance Assessment**: Reveals model stability across different data subsets
+4. **Overfitting Detection**: Identifies if model generalizes well
+
+**Typical Cross-Validation Process:**
+
+```python
+from sklearn.model_selection import cross_val_score
+from xgboost import XGBRegressor
+import numpy as np
+
+# K-fold cross-validation
+model = XGBRegressor()
+scores = cross_val_score(
+    model, 
+    X, 
+    y, 
+    cv=5,  # 5-fold cross-validation
+    scoring='neg_mean_squared_error'
+)
+
+# Calculate RMSE from negative MSE
+rmse_scores = np.sqrt(-scores)
+average_rmse = np.mean(rmse_scores)
+
+print(f"Average RMSE: {average_rmse:.4f}")
+```
+
+## Model Comparison
+
+### Soil pH: XGBoost vs Neural Network
+
+The original research paper used neural networks, but MavunoX implemented XGBoost regression:
+
+**Advantages of XGBoost:**
+- Better performance on small tabular datasets
+- Faster training and inference times
+- Built-in feature importance analysis
+- Less prone to overfitting with limited data
+- No need for extensive hyperparameter tuning
+
+## Evaluation Metrics Summary
+
+### Classification Metrics (Main Model)
+
+**Accuracy**: Overall correctness of predictions
+```python
+accuracy = (TP + TN) / (TP + TN + FP + FN)
+```
+
+**Precision**: Correctness of positive predictions
+```python
+precision = TP / (TP + FP)
+```
+
+**Recall**: Coverage of actual positives
+```python
+recall = TP / (TP + FN)
+```
+
+**F1-Score**: Harmonic mean of precision and recall
+```python
+f1_score = 2 * (precision * recall) / (precision + recall)
+```
+
+### Regression Metrics (Soil pH Model)
+
+**Root Mean Squared Error (RMSE)**: Standard deviation of residuals
+```python
+rmse = sqrt(mean((y_true - y_pred)^2))
+```
+
+**Advantages of RMSE:**
+- Same units as target variable (pH)
+- Penalizes large errors more than small ones
+- Widely used and interpretable
+- Sensitive to outliers (encourages robust predictions)
+
+## Performance Assessment
+
+### Main Model Strengths
+
+- **High Overall Accuracy**: 89% correct predictions
+- **Balanced Performance**: 92% macro averages across all metrics
+- **Perfect Class Performance**: Classes 1 and 2 show no errors
+- **Robust Generalization**: Strong performance on unseen test data
+
+### Soil pH Model Strengths
+
+- **Low Prediction Error**: RMSE of 0.7049 pH units
+- **Cross-Validated**: Reliable performance estimates
+- **Practical Accuracy**: Sufficient precision for agricultural applications
+- **Efficient Approach**: XGBoost outperforms neural networks
+
+## Recommendation Scoring
+
+Beyond model predictions, MavunoX implements custom scoring for agricultural recommendations:
+
+### Status Calculation
+
+Binary indicator of whether a value falls within optimal range:
+
+```python
+def calc_status(value, value_range):
+    if value >= value_range[0] and value <= value_range[1]:
+        status = 1
+    else:
+        status = 0
+    return status
+```
+
+### Scale Calculation
+
+Gaussian-based similarity score showing how close a value is to optimal:
+
+```python
+def calc_scale(actual_number, input_number, k):
+    absolute_difference = abs(actual_number - input_number)
+    scale_value = 100 * math.exp(-k * absolute_difference**2)
+    return scale_value
+```
+
+**Parameters:**
+- `actual_number`: Measured value
+- `input_number`: Optimal value for crop
+- `k`: Sensitivity parameter (varies by factor)
+
+**K Values by Factor:**
+- pH: k = 0.6 (more sensitive to pH deviations)
+- Water availability: k = 0.00025 (less sensitive to variations)
+- Temperature: k = 0.04
+- Humidity: k = 0.0015
+
+The scale returns a value from 0-100, where 100 indicates perfect match with optimal conditions.
+
+## Future Improvements
+
+- **Class Balancing**: Address imbalance in season distribution
+- **Additional Metrics**: Add confusion matrices and ROC curves
+- **Feature Importance**: Analyze XGBoost feature contributions
+- **Ensemble Methods**: Combine multiple models for improved accuracy
+- **Real-World Validation**: Test predictions against actual harvest outcomes
+- **Water Model Enhancement**: Replace simple grayscale approach with ML model

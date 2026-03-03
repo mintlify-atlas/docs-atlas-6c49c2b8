@@ -1,0 +1,387 @@
+---
+title: Environmental Analysis Endpoint
+description: Analyze temperature and humidity conditions for crop suitability
+---
+
+## Overview
+
+The environmental analysis endpoint processes current temperature and humidity measurements to assess their suitability for a specific crop. It compares measured values against optimal ranges and provides suitability scores to guide farming decisions.
+
+## Endpoint
+
+<CodeGroup>
+```bash POST /api/get_second_results/
+curl -X POST http://localhost:8000/api/get_second_results/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temperature": 28.5,
+    "humidity": 72.0,
+    "label": "maize"
+  }'
+```
+</CodeGroup>
+
+Processes environmental data to determine crop suitability based on temperature and humidity conditions.
+
+## Request Schema
+
+The endpoint accepts the `SecondData` model:
+
+<ParamField body="temperature" type="float" required>
+  Current temperature in degrees Celsius (°C)
+</ParamField>
+
+<ParamField body="humidity" type="float" required>
+  Current relative humidity as a percentage (%)
+</ParamField>
+
+<ParamField body="label" type="string" required>
+  Crop type being analyzed (e.g., "rice", "maize", "cotton")
+</ParamField>
+
+## Response Schema
+
+The endpoint returns a comprehensive environmental suitability assessment:
+
+<ResponseField name="temperature" type="float">
+  Measured temperature value (echoed from request)
+</ResponseField>
+
+<ResponseField name="humidity" type="float">
+  Measured humidity value (echoed from request)
+</ResponseField>
+
+<ResponseField name="exp_temperature" type="object">
+  Expected temperature ranges for the specified crop
+  
+  <Expandable title="properties">
+    <ResponseField name="min" type="float">
+      Minimum acceptable temperature in °C
+    </ResponseField>
+    
+    <ResponseField name="max" type="float">
+      Maximum acceptable temperature in °C
+    </ResponseField>
+    
+    <ResponseField name="opt" type="float">
+      Optimal temperature in °C for maximum yield
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exp_humidity" type="object">
+  Expected humidity ranges for the specified crop
+  
+  <Expandable title="properties">
+    <ResponseField name="min" type="float">
+      Minimum acceptable humidity in %
+    </ResponseField>
+    
+    <ResponseField name="max" type="float">
+      Maximum acceptable humidity in %
+    </ResponseField>
+    
+    <ResponseField name="opt" type="float">
+      Optimal humidity in % for maximum yield
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="temperature_rec" type="object">
+  Temperature suitability assessment
+  
+  <Expandable title="properties">
+    <ResponseField name="status" type="integer">
+      1 if temperature is within acceptable range, 0 otherwise
+    </ResponseField>
+    
+    <ResponseField name="scale" type="float">
+      Suitability score (0-100) based on proximity to optimal temperature
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="humidity_rec" type="object">
+  Humidity suitability assessment
+  
+  <Expandable title="properties">
+    <ResponseField name="status" type="integer">
+      1 if humidity is within acceptable range, 0 otherwise
+    </ResponseField>
+    
+    <ResponseField name="scale" type="float">
+      Suitability score (0-100) based on proximity to optimal humidity
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request & Response
+
+**Request:**
+```json
+{
+  "temperature": 28.5,
+  "humidity": 72.0,
+  "label": "maize"
+}
+```
+
+**Response:**
+```json
+{
+  "temperature": 28.5,
+  "humidity": 72.0,
+  "exp_temperature": {
+    "min": 20.0,
+    "max": 35.0,
+    "opt": 27.5
+  },
+  "exp_humidity": {
+    "min": 60.0,
+    "max": 80.0,
+    "opt": 70.0
+  },
+  "temperature_rec": {
+    "status": 1,
+    "scale": 96.8
+  },
+  "humidity_rec": {
+    "status": 1,
+    "scale": 98.2
+  }
+}
+```
+
+## How It Works
+
+The `get_Second_Results()` function (`general.py:207`) performs environmental suitability analysis:
+
+### 1. Data Retrieval
+
+Fetches optimal ranges for the specified crop from the crop information database:
+
+```python
+temperature_min = crop_info[label]['temperature']['min']
+temperature_max = crop_info[label]['temperature']['max']
+temperature_opt = crop_info[label]['temperature']['opt']
+
+humidity_min = crop_info[label]['humidity']['min']
+humidity_max = crop_info[label]['humidity']['max']
+humidity_opt = crop_info[label]['humidity']['opt']
+```
+
+### 2. Status Calculation
+
+Determines if measured values fall within acceptable ranges (`general.py:208-209`):
+
+```python
+temperature_status = calc_status(temperature, [temp_min, temp_max])
+humidity_status = calc_status(humidity, [humidity_min, humidity_max])
+```
+
+**Logic (`general.py:142`):**
+- Returns `1` if value is between min and max (inclusive)
+- Returns `0` if value is outside the acceptable range
+
+### 3. Scale Calculation
+
+Computes suitability scores based on proximity to optimal values (`general.py:210-211`):
+
+```python
+temperature_scale = calc_scale(temperature, temperature_opt, 0.04)
+humidity_scale = calc_scale(humidity, humidity_opt, 0.0015)
+```
+
+**Formula (`general.py:149`):**
+```python
+absolute_difference = abs(optimal_value - measured_value)
+scale_value = 100 * exp(-k * absolute_difference^2)
+```
+
+**Decay constants:**
+- Temperature: `k = 0.04` - Moderate sensitivity to temperature deviations
+- Humidity: `k = 0.0015` - Lower sensitivity to humidity deviations
+
+### 4. Response Construction
+
+Assembles all metrics into a structured JSON response with measured values, expected ranges, and suitability assessments.
+
+## Understanding the Scale Score
+
+The scale score uses a Gaussian (bell curve) function to measure how close your conditions are to optimal:
+
+| Scale Value | Interpretation | Recommended Action |
+|-------------|----------------|--------------------|
+| 95-100 | Excellent - Near optimal conditions | Maintain current practices |
+| 85-94 | Very Good - Minor deviation | Monitor, no immediate action needed |
+| 70-84 | Good - Noticeable deviation | Consider minor adjustments |
+| 50-69 | Fair - Significant deviation | Plan corrective measures |
+| 30-49 | Poor - Major deviation | Implement corrective actions |
+| 0-29 | Very Poor - Extreme deviation | Urgent intervention required |
+
+### Example Calculations
+
+**Temperature Analysis (Optimal: 25°C, k=0.04):**
+- At 25°C: Scale = 100.0 (perfect)
+- At 26°C: Scale = 96.1 (1°C difference)
+- At 28°C: Scale = 84.4 (3°C difference)
+- At 30°C: Scale = 67.0 (5°C difference)
+- At 35°C: Scale = 32.5 (10°C difference)
+
+**Humidity Analysis (Optimal: 70%, k=0.0015):**
+- At 70%: Scale = 100.0 (perfect)
+- At 75%: Scale = 96.4 (5% difference)
+- At 80%: Scale = 85.9 (10% difference)
+- At 85%: Scale = 71.2 (15% difference)
+- At 90%: Scale = 54.9 (20% difference)
+
+## Crop Environmental Requirements
+
+All crop requirements are loaded from the crop information database (`ML_Models/crop_info.pkl`). Here are some common examples:
+
+### Rice
+```json
+{
+  "temperature": { "min": 20, "max": 35, "opt": 27.5 },
+  "humidity": { "min": 70, "max": 90, "opt": 80 }
+}
+```
+
+### Maize
+```json
+{
+  "temperature": { "min": 18, "max": 32, "opt": 25 },
+  "humidity": { "min": 60, "max": 80, "opt": 70 }
+}
+```
+
+### Cotton
+```json
+{
+  "temperature": { "min": 21, "max": 35, "opt": 28 },
+  "humidity": { "min": 50, "max": 70, "opt": 60 }
+}
+```
+
+<Note>
+Exact values may vary. The actual ranges are determined by the crop_info database loaded from `ML_Models/crop_info.pkl`.
+</Note>
+
+## Supported Crops
+
+The endpoint supports environmental analysis for all crops in the MavunoX database:
+
+- blackgram
+- chickpea
+- cotton
+- jute
+- kidneybeans
+- lentil
+- maize
+- mothbeans
+- mungbean
+- muskmelon
+- pigeonpeas
+- rice
+- watermelon
+
+## Workflow Integration
+
+This endpoint is typically used as the second step in a complete crop analysis workflow:
+
+### Step 1: Soil Analysis
+Use `/api/get_first_results/` to analyze soil color and get:
+- Soil pH
+- Water availability
+- Harvest season
+
+### Step 2: Environmental Analysis
+Use `/api/get_second_results/` (this endpoint) to analyze:
+- Current temperature
+- Current humidity
+
+### Step 3: Recommendations (Optional)
+Use the recommendation endpoints to get AI-generated advice:
+- `/api/recommedations/temperature`
+- `/api/recommedations/humidity`
+- `/api/recommedations/ph`
+- `/api/recommedations/water_availability`
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Measurement Timing">
+    - Take measurements during typical growing hours (mid-morning to mid-afternoon)
+    - Avoid extreme weather events that don't represent normal conditions
+    - Average multiple readings over several days for more reliable assessment
+  </Accordion>
+  
+  <Accordion title="Sensor Calibration">
+    - Use calibrated sensors for accurate temperature and humidity readings
+    - Place sensors at crop canopy height, not ground level
+    - Protect sensors from direct sunlight and rain
+    - Regular maintenance ensures measurement accuracy
+  </Accordion>
+  
+  <Accordion title="Interpreting Combined Metrics">
+    Both temperature and humidity must be suitable for optimal growth:
+    - **Both status = 1:** Proceed with confidence
+    - **One status = 0:** Address the problematic factor
+    - **Both status = 0:** Consider alternative crops or significant intervention
+  </Accordion>
+  
+  <Accordion title="Seasonal Variations">
+    Environmental conditions change throughout the growing season. Re-assess regularly to ensure conditions remain suitable as the crop develops through different growth stages.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+**Unknown crop label:**
+Will cause a KeyError when accessing `crop_info`. Ensure the `label` parameter matches one of the supported crops exactly (lowercase, no spaces).
+
+**Invalid temperature/humidity values:**
+Extreme values (e.g., temperature < -50°C or > 60°C, humidity < 0% or > 100%) may indicate sensor errors. Validate inputs before submission.
+
+**Missing crop information:**
+If the crop_info database is missing or corrupted, the endpoint will fail. Ensure `ML_Models/crop_info.pkl` is properly deployed.
+
+## Example Use Cases
+
+### Daily Monitoring
+```bash
+# Check if today's conditions are suitable for rice cultivation
+curl -X POST http://localhost:8000/api/get_second_results/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temperature": 29.2,
+    "humidity": 78.5,
+    "label": "rice"
+  }'
+```
+
+### Pre-planting Assessment
+```bash
+# Evaluate if current season is suitable for cotton
+curl -X POST http://localhost:8000/api/get_second_results/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temperature": 26.8,
+    "humidity": 55.0,
+    "label": "cotton"
+  }'
+```
+
+### Crop Selection
+```bash
+# Test multiple crops to find best match for current conditions
+curl -X POST http://localhost:8000/api/get_second_results/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temperature": 24.0,
+    "humidity": 68.0,
+    "label": "maize"
+  }'
+```
+
+Compare scale scores across different crops to identify which one is best suited for your current environmental conditions.

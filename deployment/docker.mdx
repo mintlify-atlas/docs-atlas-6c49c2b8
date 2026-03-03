@@ -1,0 +1,238 @@
+---
+title: Docker Deployment
+description: Deploy MavunoX using Docker and Docker Compose
+---
+
+## Overview
+
+MavunoX provides Docker support for containerized deployment. The application runs as a FastAPI service with Redis for caching, orchestrated using Docker Compose.
+
+## Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- OpenAI API key
+
+## Dockerfile Configuration
+
+The application uses a Python 3.9 slim base image and exposes port 80:
+
+```dockerfile
+# Use an official Python runtime as a parent image
+FROM python:3.9-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Set environment variables
+ENV HOST=0.0.0.0
+ENV PORT=80
+
+# Command to run on container start
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
+```
+
+## Docker Compose Setup
+
+The `docker-compose.yml` configures both the FastAPI application and Redis service:
+
+```yaml
+version: '3'
+
+services:
+  fastapi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:80"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=80
+    depends_on:
+      - redis
+    networks:
+      - fastapi-network
+
+  redis:
+    image: "redis:alpine"
+    networks:
+      - fastapi-network
+
+networks:
+  fastapi-network:
+    driver: bridge
+```
+
+### Port Mapping
+
+- **Container port**: 80 (internal)
+- **Host port**: 8000 (external)
+- Access the API at `http://localhost:8000`
+
+## Deployment Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repository-url>
+    cd mavunox
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file in the project root:
+
+    ```bash
+    OPENAI_API_KEY=your_openai_api_key_here
+    ```
+
+    See [Configuration](/deployment/configuration) for details.
+  </Step>
+
+  <Step title="Build and start services">
+    ```bash
+    docker-compose up --build -d
+    ```
+
+    This command:
+    - Builds the FastAPI application image
+    - Pulls the Redis Alpine image
+    - Starts both services in detached mode
+    - Creates the `fastapi-network` bridge network
+  </Step>
+
+  <Step title="Verify deployment">
+    Check that services are running:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    Test the API:
+
+    ```bash
+    curl http://localhost:8000/
+    # Expected response: "ACTIVE"
+    ```
+  </Step>
+</Steps>
+
+## Managing the Deployment
+
+### View Logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f fastapi-app
+docker-compose logs -f redis
+```
+
+### Stop Services
+
+```bash
+# Stop without removing containers
+docker-compose stop
+
+# Stop and remove containers
+docker-compose down
+
+# Stop and remove containers, volumes, and images
+docker-compose down -v --rmi all
+```
+
+### Restart Services
+
+```bash
+# Restart all services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart fastapi-app
+```
+
+### Update Deployment
+
+```bash
+# Pull latest code
+git pull
+
+# Rebuild and restart
+docker-compose up --build -d
+```
+
+## Network Architecture
+
+The Docker Compose setup creates an isolated bridge network:
+
+- **Network name**: `fastapi-network`
+- **Driver**: bridge
+- **Services**: fastapi-app, redis
+
+Services communicate internally using service names as hostnames.
+
+## Dependencies
+
+The FastAPI application depends on Redis:
+
+```yaml
+depends_on:
+  - redis
+```
+
+Docker Compose ensures Redis starts before the FastAPI application.
+
+## Troubleshooting
+
+### Port Already in Use
+
+If port 8000 is already in use, modify the port mapping in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "8080:80"  # Use port 8080 instead
+```
+
+### Container Won't Start
+
+Check logs for errors:
+
+```bash
+docker-compose logs fastapi-app
+```
+
+Common issues:
+- Missing or invalid `OPENAI_API_KEY`
+- Dependencies not installed (rebuild with `--no-cache`)
+- Port conflicts
+
+### Rebuild from Scratch
+
+```bash
+docker-compose down -v
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Configure environment variables and API keys
+  </Card>
+  <Card title="Production" icon="server" href="/deployment/production">
+    Deploy to production environments
+  </Card>
+</CardGroup>

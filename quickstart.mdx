@@ -1,80 +1,362 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get your first harvest prediction in under 5 minutes
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will help you set up MavunoX locally and make your first harvest prediction request.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Before you begin, ensure you have:
 
-### Step 2: Deploy your changes
+- **Python 3.9 or higher** installed
+- **pip** package manager
+- **Git** for cloning the repository (optional)
+- **OpenAI API key** for recommendation features
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Note>
+The recommendation endpoints require an OpenAI API key. If you only need harvest predictions, you can skip setting up the API key.
+</Note>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Installation
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repository-url>
+    cd mavunox
+    ```
+  </Step>
 
-### Step 3: Go live
+  <Step title="Install dependencies">
+    Install all required Python packages from `requirements.txt`:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-## Next steps
+    <Accordion title="View core dependencies">
+      The main dependencies include:
+      - `fastapi==0.104.1` - Web framework
+      - `uvicorn==0.24.0.post1` - ASGI server
+      - `xgboost==2.0.2` - ML models
+      - `pandas==2.1.3` - Data processing
+      - `scikit-learn==1.3.2` - ML utilities
+      - `openai==1.3.5` - AI recommendations
+      - `pydantic==2.5.2` - Data validation
+    </Accordion>
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Set up environment variables (optional)">
+    Create a `.env` file in the project root for OpenAI API access:
+
+    ```bash
+    OPENAI_API_KEY=your_api_key_here
+    ```
+
+    <Warning>
+    Never commit your `.env` file to version control. Add it to `.gitignore`.
+    </Warning>
+  </Step>
+
+  <Step title="Start the API server">
+    Run the FastAPI application using Uvicorn:
+
+    ```bash
+    uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+    ```
+
+    You should see output similar to:
+    ```
+    INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+    INFO:     Started reloader process
+    INFO:     Started server process
+    INFO:     Waiting for application startup.
+    INFO:     Application startup complete.
+    ```
+  </Step>
+
+  <Step title="Verify the server is running">
+    Visit `http://localhost:8000` in your browser or use curl:
+
+    ```bash
+    curl http://localhost:8000
+    ```
+
+    Expected response:
+    ```json
+    "ACTIVE"
+    ```
+  </Step>
+</Steps>
+
+## Make Your First Prediction
+
+Let's predict the harvest season for rice in Nigeria based on soil color analysis.
+
+### Step 1: Get Soil Analysis and Harvest Prediction
+
+Send RGB soil color values along with crop and country information:
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/api/get_first_results/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "R": 150,
+    "G": 100,
+    "B": 80,
+    "label": "rice",
+    "country": "Nigeria"
+  }'
+```
+
+```python Python
+import httpx
+
+response = httpx.post(
+    "http://localhost:8000/api/get_first_results/",
+    json={
+        "R": 150,
+        "G": 100,
+        "B": 80,
+        "label": "rice",
+        "country": "Nigeria"
+    }
+)
+
+result = response.json()
+print(f"Predicted harvest season: {result['harvest_season']}")
+print(f"Soil pH: {result['ph']}")
+print(f"Water availability: {result['water_availability']} mm")
+```
+
+```javascript JavaScript
+fetch('http://localhost:8000/api/get_first_results/', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    R: 150,
+    G: 100,
+    B: 80,
+    label: 'rice',
+    country: 'Nigeria'
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log('Harvest season:', data.harvest_season);
+  console.log('Soil pH:', data.ph);
+  console.log('Water availability:', data.water_availability, 'mm');
+});
+```
+</CodeGroup>
+
+### Expected Response
+
+```json
+{
+  "ph": 6.8,
+  "water_availability": 145.3,
+  "label": "rice",
+  "Country": "Nigeria",
+  "harvest_season": "rainy",
+  "exp_ph": {
+    "min": 5.5,
+    "max": 7.0,
+    "opt": 6.5
+  },
+  "exp_water_availability": {
+    "min": 100.0,
+    "max": 200.0,
+    "opt": 150.0
+  },
+  "duration": 140.0,
+  "ph_rec": {
+    "status": 1,
+    "scale": 89.5
+  },
+  "water_availability_rec": {
+    "status": 1,
+    "scale": 92.3
+  }
+}
+```
+
+<Tip>
+The `status` field indicates whether the value is within the optimal range (1 = yes, 0 = no). The `scale` field shows how close the value is to optimal (0-100).
+</Tip>
+
+### Step 2: Add Temperature and Humidity Analysis
+
+For a complete analysis, send temperature and humidity data:
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/api/get_second_results/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temperature": 28.5,
+    "humidity": 75.0,
+    "label": "rice"
+  }'
+```
+
+```python Python
+import httpx
+
+response = httpx.post(
+    "http://localhost:8000/api/get_second_results/",
+    json={
+        "temperature": 28.5,
+        "humidity": 75.0,
+        "label": "rice"
+    }
+)
+
+result = response.json()
+print(f"Temperature status: {result['temperature_rec']['status']}")
+print(f"Humidity status: {result['humidity_rec']['status']}")
+```
+</CodeGroup>
+
+### Expected Response
+
+```json
+{
+  "temperature": 28.5,
+  "humidity": 75.0,
+  "exp_temperature": {
+    "min": 20.0,
+    "max": 35.0,
+    "opt": 25.0
+  },
+  "exp_humidity": {
+    "min": 60.0,
+    "max": 90.0,
+    "opt": 80.0
+  },
+  "temperature_rec": {
+    "status": 1,
+    "scale": 76.4
+  },
+  "humidity_rec": {
+    "status": 1,
+    "scale": 88.2
+  }
+}
+```
+
+### Step 3: Get AI-Powered Recommendations (Optional)
+
+Request specific farming recommendations based on your measurements:
+
+<CodeGroup>
+```bash cURL - Temperature
+curl -X POST "http://localhost:8000/api/recommedations/temperature" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 20.0,
+    "max": 35.0,
+    "value": 28.5,
+    "label": "rice"
+  }'
+```
+
+```bash cURL - pH
+curl -X POST "http://localhost:8000/api/recommedations/ph" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 5.5,
+    "max": 7.0,
+    "value": 6.8,
+    "label": "rice"
+  }'
+```
+
+```python Python
+import httpx
+
+# Get pH recommendation
+response = httpx.post(
+    "http://localhost:8000/api/recommedations/ph",
+    json={
+        "min": 5.5,
+        "max": 7.0,
+        "value": 6.8,
+        "label": "rice"
+    }
+)
+
+recommendation = response.json()
+print(recommendation)
+```
+</CodeGroup>
+
+## Understanding the Response
+
+### Harvest Prediction Response
+
+- **ph** - Predicted soil pH from RGB color analysis
+- **water_availability** - Estimated water content in mm
+- **harvest_season** - Predicted optimal harvest season (rainy, dry, winter, summer)
+- **exp_ph / exp_water_availability** - Expected optimal ranges for the crop
+- **duration** - Typical crop growth duration in days
+- **status** - Whether current values are within optimal range (1=yes, 0=no)
+- **scale** - Proximity to optimal value (0-100, higher is better)
+
+### Supported Countries
+
+- Nigeria
+- South Africa
+- Kenya
+- Sudan
+
+### Supported Crops
+
+blackgram, chickpea, cotton, jute, kidneybeans, lentil, maize, mothbeans, mungbean, muskmelon, pigeonpeas, rice, watermelon
+
+## Using Docker (Alternative Setup)
+
+If you prefer Docker deployment:
+
+<Steps>
+  <Step title="Build the Docker image">
+    ```bash
+    docker build -t mavunox:latest .
+    ```
+  </Step>
+
+  <Step title="Run the container">
+    ```bash
+    docker run -d -p 80:80 --name mavunox mavunox:latest
+    ```
+  </Step>
+
+  <Step title="Access the API">
+    The API will be available at `http://localhost:80`
+  </Step>
+</Steps>
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Explore API Endpoints" icon="code" href="/api/overview">
+    Learn about all available endpoints and parameters
+  </Card>
+  <Card title="Model Architecture" icon="diagram-project" href="/models/harvest-prediction">
+    Understand the ML models and their training data
+  </Card>
+  <Card title="Deploy to Production" icon="rocket" href="/deployment/docker">
+    Deploy MavunoX to cloud platforms
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/overview">
+    Understand how MavunoX works
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+For production deployment, ensure you set up proper environment variables, enable HTTPS, and configure rate limiting for the OpenAI API endpoints.
 </Note>

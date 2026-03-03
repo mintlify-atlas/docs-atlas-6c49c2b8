@@ -1,0 +1,134 @@
+---
+title: API Overview
+description: Introduction to the MavunoX REST API
+---
+
+## Base URL
+
+The MavunoX API is a FastAPI-based REST API that provides crop recommendation and soil analysis services.
+
+```
+http://localhost:8000
+```
+
+For production deployments, replace with your deployed API URL.
+
+## API Status
+
+Check if the API is active:
+
+```bash
+curl http://localhost:8000/
+```
+
+**Response:**
+```json
+"ACTIVE"
+```
+
+## Authentication
+
+Currently, the MavunoX API does not require authentication. All endpoints are publicly accessible.
+
+<Note>
+For production deployments, consider implementing authentication mechanisms to secure your API endpoints.
+</Note>
+
+## CORS Configuration
+
+The API is configured with CORS middleware to allow cross-origin requests:
+
+- **Allowed Origins:** `*` (all origins)
+- **Allow Credentials:** `true`
+- **Allowed Methods:** `*` (all HTTP methods)
+- **Allowed Headers:** `*` (all headers)
+
+## Content Type
+
+All API endpoints accept and return JSON data. Make sure to set the appropriate headers:
+
+```bash
+Content-Type: application/json
+```
+
+## API Structure
+
+The MavunoX API is organized into three main categories:
+
+### 1. Recommendation Endpoints
+
+Generate AI-powered recommendations for optimizing crop yield based on environmental factors:
+
+- `/api/recommedations/temperature` - Temperature recommendations
+- `/api/recommedations/humidity` - Humidity recommendations
+- `/api/recommedations/ph` - Soil pH recommendations
+- `/api/recommedations/water_availability` - Water availability recommendations
+
+### 2. Soil Analysis Endpoint
+
+Analyze soil properties from RGB color values:
+
+- `/api/get_first_results/` - Process soil color to determine pH, water availability, and harvest season
+
+### 3. Environmental Analysis Endpoint
+
+Analyze environmental conditions for crop suitability:
+
+- `/api/get_second_results/` - Process temperature and humidity data
+
+## Error Handling
+
+The API uses standard HTTP status codes:
+
+- **200** - Success
+- **422** - Validation Error (invalid request body)
+- **500** - Internal Server Error
+
+**Example validation error response:**
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "R"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+## Rate Limiting
+
+Currently, there are no rate limits implemented. For production use, consider implementing rate limiting to prevent abuse.
+
+## Supported Crops
+
+The API supports the following crops for analysis and recommendations:
+
+- blackgram
+- chickpea
+- cotton
+- jute
+- kidneybeans
+- lentil
+- maize
+- mothbeans
+- mungbean
+- muskmelon
+- pigeonpeas
+- rice
+- watermelon
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Recommendations" icon="lightbulb" href="/api/recommendations">
+    Learn about AI-powered crop recommendations
+  </Card>
+  <Card title="Soil Analysis" icon="seedling" href="/api/soil-analysis">
+    Analyze soil properties from RGB values
+  </Card>
+  <Card title="Environmental Analysis" icon="cloud-sun" href="/api/environmental-analysis">
+    Analyze temperature and humidity conditions
+  </Card>
+</CardGroup>

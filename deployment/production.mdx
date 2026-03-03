@@ -1,0 +1,519 @@
+---
+title: Production Deployment
+description: Deploy MavunoX to production environments
+---
+
+## Overview
+
+MavunoX is currently deployed at [https://mavunox.onrender.com](https://mavunox.onrender.com) using Render. This guide covers production deployment considerations and best practices.
+
+## Production Deployment Options
+
+### Render (Current)
+
+The application is deployed on Render with the following configuration:
+
+- **URL**: https://mavunox.onrender.com
+- **Service type**: Web Service
+- **Runtime**: Docker
+- **Port**: 80 (internal)
+
+### Other Platforms
+
+<CardGroup cols={2}>
+  <Card title="Railway" icon="train">
+    Deploy with automatic GitHub integration and managed Redis
+  </Card>
+  <Card title="Fly.io" icon="plane">
+    Global edge deployment with auto-scaling
+  </Card>
+  <Card title="AWS ECS" icon="aws">
+    Enterprise-grade container orchestration
+  </Card>
+  <Card title="Google Cloud Run" icon="google">
+    Serverless container deployment
+  </Card>
+</CardGroup>
+
+## Port Configuration
+
+MavunoX is configured to run on port 80 by default:
+
+**From Dockerfile**:
+
+```dockerfile
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Set environment variables
+ENV HOST=0.0.0.0
+ENV PORT=80
+
+# Command to run on container start
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
+```
+
+### Port Mapping
+
+- **Development**: `8000:80` (docker-compose.yml)
+- **Production**: Platform-specific (usually automatic)
+
+<Note>
+  Most cloud platforms automatically handle port mapping. The `EXPOSE 80` directive in the Dockerfile informs the platform which port the application listens on.
+</Note>
+
+## Pre-deployment Checklist
+
+<Steps>
+  <Step title="Environment variables">
+    Ensure all required environment variables are set:
+
+    ```bash
+    OPENAI_API_KEY=sk-prod-xxxxxxxx
+    HOST=0.0.0.0
+    PORT=80
+    ```
+
+    See [Configuration](/deployment/configuration) for details.
+  </Step>
+
+  <Step title="Update CORS settings">
+    Restrict CORS to your production domains in `app.py`:
+
+    ```python
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "https://yourdomain.com",
+            "https://mavunox.onrender.com"
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"]
+    )
+    ```
+
+    Current configuration allows all origins (`"*"`) - suitable for development only.
+  </Step>
+
+  <Step title="Test dependencies">
+    Verify all dependencies are in `requirements.txt`:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    Key dependencies:
+    - `fastapi==0.104.1`
+    - `uvicorn==0.24.0.post1`
+    - `openai==1.3.5`
+    - `python-dotenv==1.0.0`
+    - `redis` (if using caching)
+  </Step>
+
+  <Step title="Test the Docker build">
+    Build and test locally before deploying:
+
+    ```bash
+    docker build -t mavunox:latest .
+    docker run -p 8000:80 --env-file .env mavunox:latest
+    ```
+
+    Test endpoints:
+
+    ```bash
+    curl http://localhost:8000/
+    # Should return: "ACTIVE"
+    ```
+  </Step>
+</Steps>
+
+## Deploying to Render
+
+<Steps>
+  <Step title="Connect repository">
+    1. Go to [Render Dashboard](https://dashboard.render.com)
+    2. Click "New +" → "Web Service"
+    3. Connect your Git repository
+  </Step>
+
+  <Step title="Configure service">
+    Set the following options:
+
+    - **Name**: mavunox (or your preferred name)
+    - **Environment**: Docker
+    - **Region**: Choose closest to your users
+    - **Branch**: main (or your production branch)
+  </Step>
+
+  <Step title="Set environment variables">
+    Add in the "Environment" section:
+
+    ```
+    OPENAI_API_KEY=sk-your-production-key
+    ```
+
+    HOST and PORT are set in the Dockerfile.
+  </Step>
+
+  <Step title="Deploy">
+    Click "Create Web Service". Render will:
+
+    1. Clone your repository
+    2. Build the Docker image
+    3. Deploy the container
+    4. Assign a URL (e.g., https://mavunox.onrender.com)
+  </Step>
+</Steps>
+
+## Deploying to Other Platforms
+
+### Railway
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login
+railway login
+
+# Initialize project
+railway init
+
+# Add Redis
+railway add redis
+
+# Deploy
+railway up
+```
+
+### Fly.io
+
+```bash
+# Install Fly CLI
+curl -L https://fly.io/install.sh | sh
+
+# Login
+fly auth login
+
+# Launch app
+fly launch
+
+# Set secrets
+fly secrets set OPENAI_API_KEY=sk-your-key
+
+# Deploy
+fly deploy
+```
+
+### AWS ECS
+
+<Steps>
+  <Step title="Build and push image">
+    ```bash
+    # Build
+    docker build -t mavunox:latest .
+
+    # Tag for ECR
+    docker tag mavunox:latest <account-id>.dkr.ecr.<region>.amazonaws.com/mavunox:latest
+
+    # Push to ECR
+    docker push <account-id>.dkr.ecr.<region>.amazonaws.com/mavunox:latest
+    ```
+  </Step>
+
+  <Step title="Create ECS task definition">
+    Define task with:
+    - Container image from ECR
+    - Port mapping: 80
+    - Environment variables from Secrets Manager
+    - CPU and memory allocation
+  </Step>
+
+  <Step title="Create ECS service">
+    - Choose Fargate or EC2 launch type
+    - Configure auto-scaling
+    - Set up load balancer
+    - Configure health checks on `/` endpoint
+  </Step>
+</Steps>
+
+## Health Checks
+
+MavunoX provides a health check endpoint:
+
+```python
+@app.get("/")
+def main():
+    return "ACTIVE"
+```
+
+Configure your platform to monitor this endpoint:
+
+- **Path**: `/`
+- **Expected response**: `"ACTIVE"`
+- **Status code**: 200
+- **Interval**: 30 seconds (recommended)
+- **Timeout**: 5 seconds
+- **Healthy threshold**: 2 consecutive successes
+
+## Redis Configuration
+
+The docker-compose.yml includes Redis for caching:
+
+```yaml
+redis:
+  image: "redis:alpine"
+  networks:
+    - fastapi-network
+```
+
+### Production Redis Options
+
+<Tabs>
+  <Tab title="Managed Redis">
+    Use cloud-managed Redis:
+
+    - **Render**: Built-in Redis add-on
+    - **Railway**: Redis plugin
+    - **AWS**: ElastiCache
+    - **Google Cloud**: Memorystore
+
+    Update connection in your code:
+
+    ```python
+    import redis
+    import os
+
+    redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+    r = redis.from_url(redis_url)
+    ```
+  </Tab>
+
+  <Tab title="Self-hosted">
+    Deploy Redis alongside your app:
+
+    ```yaml
+    services:
+      fastapi-app:
+        # ... your app config
+
+      redis:
+        image: redis:alpine
+        volumes:
+          - redis-data:/data
+        command: redis-server --appendonly yes
+
+    volumes:
+      redis-data:
+    ```
+  </Tab>
+</Tabs>
+
+## Monitoring and Logging
+
+### Application Logs
+
+Uvicorn logs all requests automatically:
+
+```
+INFO:     127.0.0.1:52364 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52365 - "POST /api/recommedations/temperature HTTP/1.1" 200 OK
+```
+
+### Platform-specific Monitoring
+
+<AccordionGroup>
+  <Accordion title="Render">
+    - View logs in Dashboard → Logs tab
+    - Set up log drains to external services
+    - Monitor metrics (CPU, memory, request rate)
+  </Accordion>
+
+  <Accordion title="Railway">
+    - Real-time logs in project dashboard
+    - Metrics on usage and performance
+    - Integration with observability tools
+  </Accordion>
+
+  <Accordion title="AWS CloudWatch">
+    - Container logs automatically sent to CloudWatch Logs
+    - Set up alarms on error rates, latency
+    - Create custom metrics from log patterns
+  </Accordion>
+</AccordionGroup>
+
+### Error Tracking
+
+Integrate error tracking services:
+
+```python
+# Example: Sentry integration
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
+    integrations=[FastApiIntegration()],
+    traces_sample_rate=1.0,
+)
+```
+
+## Performance Optimization
+
+### Uvicorn Workers
+
+For production, run multiple workers:
+
+```dockerfile
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80", "--workers", "4"]
+```
+
+Or use Gunicorn with Uvicorn workers:
+
+```dockerfile
+CMD ["gunicorn", "app:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:80"]
+```
+
+### Caching
+
+Implement caching for recommendation responses:
+
+```python
+import redis
+import json
+import hashlib
+
+r = redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379'))
+
+def rec_gen_cached(factor, min, max, value, unit, crop):
+    # Create cache key
+    cache_key = hashlib.md5(
+        f"{factor}{min}{max}{value}{unit}{crop}".encode()
+    ).hexdigest()
+
+    # Check cache
+    cached = r.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    # Generate recommendation
+    result = rec_gen(factor, min, max, value, unit, crop)
+
+    # Cache for 1 hour
+    r.setex(cache_key, 3600, json.dumps(result))
+
+    return result
+```
+
+## Security Hardening
+
+<Steps>
+  <Step title="Use HTTPS only">
+    Ensure your production deployment uses HTTPS. Most platforms (Render, Railway, Fly.io) provide automatic SSL certificates.
+  </Step>
+
+  <Step title="Restrict CORS">
+    Update `allow_origins` to specific domains:
+
+    ```python
+    allow_origins=[
+        "https://mavunox.onrender.com",
+        "https://yourdomain.com"
+    ]
+    ```
+  </Step>
+
+  <Step title="Rate limiting">
+    Add rate limiting to prevent abuse:
+
+    ```python
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.post("/api/recommedations/temperature")
+    @limiter.limit("10/minute")
+    def rec_gen(request: Request, data: FarmData):
+        # ... implementation
+    ```
+  </Step>
+
+  <Step title="Input validation">
+    FastAPI's Pydantic models provide validation, but add explicit checks:
+
+    ```python
+    class FarmData(BaseModel):
+        min: float = Field(gt=-100, lt=100)
+        max: float = Field(gt=-100, lt=100)
+        value: float = Field(gt=-100, lt=100)
+        label: str = Field(min_length=1, max_length=50)
+    ```
+  </Step>
+</Steps>
+
+## Scaling Considerations
+
+### Horizontal Scaling
+
+- **Render**: Auto-scaling available on paid plans
+- **Railway**: Horizontal scaling with multiple instances
+- **Kubernetes**: Deploy with HPA (Horizontal Pod Autoscaler)
+
+### Vertical Scaling
+
+Adjust resources based on load:
+
+```yaml
+# docker-compose.yml
+services:
+  fastapi-app:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+```
+
+## Rollback Strategy
+
+<Steps>
+  <Step title="Tag releases">
+    ```bash
+    git tag -a v1.0.0 -m "Release v1.0.0"
+    git push origin v1.0.0
+    ```
+  </Step>
+
+  <Step title="Keep previous images">
+    ```bash
+    docker tag mavunox:latest mavunox:v1.0.0
+    docker push mavunox:v1.0.0
+    ```
+  </Step>
+
+  <Step title="Quick rollback">
+    Most platforms support instant rollback to previous deployments:
+
+    - **Render**: Click "Rollback" in deployment history
+    - **Railway**: Redeploy previous commit from dashboard
+    - **Docker**: `docker-compose up -d mavunox:v1.0.0`
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Review environment variable setup
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Local Docker deployment guide
+  </Card>
+</CardGroup>

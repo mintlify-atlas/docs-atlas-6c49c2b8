@@ -1,0 +1,269 @@
+---
+title: Configuration
+description: Environment variables and configuration options for MavunoX
+---
+
+## Environment Variables
+
+MavunoX requires specific environment variables to function properly. These are loaded using `python-dotenv` from a `.env` file.
+
+## Required Variables
+
+### OPENAI_API_KEY
+
+The OpenAI API key is required for generating crop recommendations using GPT-3.5 Turbo.
+
+```bash
+OPENAI_API_KEY=sk-your-openai-api-key-here
+```
+
+**Usage in code** (from `recommendation_engine.py`):
+
+```python
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=api_key)
+```
+
+The recommendation engine uses GPT-3.5 Turbo to generate contextual farming advice based on environmental parameters.
+
+<Warning>
+  Never commit your `.env` file or expose your OpenAI API key in public repositories. Add `.env` to your `.gitignore` file.
+</Warning>
+
+## Server Configuration
+
+### HOST and PORT
+
+These variables configure the Uvicorn server:
+
+```bash
+HOST=0.0.0.0
+PORT=80
+```
+
+**Default values**:
+- **HOST**: `0.0.0.0` (binds to all network interfaces)
+- **PORT**: `80` (HTTP default port)
+
+These are set in the Dockerfile:
+
+```dockerfile
+ENV HOST=0.0.0.0
+ENV PORT=80
+```
+
+And used in the startup command:
+
+```dockerfile
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
+```
+
+## Configuration Setup
+
+<Steps>
+  <Step title="Create .env file">
+    Create a `.env` file in the project root directory:
+
+    ```bash
+    touch .env
+    ```
+  </Step>
+
+  <Step title="Add OpenAI API key">
+    Open the `.env` file and add your OpenAI API key:
+
+    ```bash
+    OPENAI_API_KEY=sk-your-actual-api-key-here
+    ```
+
+    Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys).
+  </Step>
+
+  <Step title="Optional: Override server settings">
+    If needed, override the default host and port:
+
+    ```bash
+    OPENAI_API_KEY=sk-your-actual-api-key-here
+    HOST=0.0.0.0
+    PORT=8080
+    ```
+  </Step>
+
+  <Step title="Verify configuration">
+    Ensure the `.env` file is in the same directory as `app.py` and is not tracked by Git:
+
+    ```bash
+    # Add to .gitignore
+    echo ".env" >> .gitignore
+    ```
+  </Step>
+</Steps>
+
+## CORS Configuration
+
+MavunoX is configured with permissive CORS settings for development and cross-origin access.
+
+**From `app.py`**:
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+```
+
+### CORS Settings Explained
+
+- **allow_origins**: `["*"]` - Allows requests from any origin
+- **allow_credentials**: `True` - Allows cookies and authentication
+- **allow_methods**: `["*"]` - Allows all HTTP methods (GET, POST, etc.)
+- **allow_headers**: `["*"]` - Allows all headers
+
+<Warning>
+  In production, restrict `allow_origins` to specific domains for security:
+
+  ```python
+  allow_origins=[
+      "https://yourdomain.com",
+      "https://app.yourdomain.com"
+  ]
+  ```
+</Warning>
+
+## OpenAI Configuration
+
+The recommendation engine uses the following OpenAI settings:
+
+- **Model**: `gpt-3.5-turbo`
+- **System prompt**: "You are a recommender for rural farmers. only use block of text in 55 words strictly and make responses dynamic"
+- **Response format**: 55-word text blocks
+- **Precision**: 2 decimal places for all numbers
+
+**From `recommendation_engine.py`**:
+
+```python
+def rec_gen(factor, min, max, value, unit, crop):
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a recommender for rural farmers. only use block of text in 55 words strictly and make responses dynamic"
+            },
+            {
+                "role": "user",
+                "content": f"Provide a recommendation to improve yield based on {factor}. The recommended {factor} is {min}-{max} {unit}, and the farm is currently at {value} {unit}. In just 55 words, assess if the current {factor} is suitable for optimal yield and add strategies to improve yield specific for the crop {crop}, recommendation should be block of text and simplified, approximate to 2 decimal places for all numbers in responds"
+            },
+        ]
+    )
+    return completion.choices[0].message.content
+```
+
+## Docker Environment Variables
+
+When deploying with Docker Compose, environment variables can be set in multiple ways:
+
+### Method 1: .env File (Recommended)
+
+Docker Compose automatically loads `.env` files:
+
+```yaml
+# docker-compose.yml
+services:
+  fastapi-app:
+    build: .
+    # .env file is automatically loaded
+```
+
+### Method 2: Inline in docker-compose.yml
+
+```yaml
+services:
+  fastapi-app:
+    build: .
+    environment:
+      - OPENAI_API_KEY=sk-your-key-here
+      - HOST=0.0.0.0
+      - PORT=80
+```
+
+### Method 3: External env_file
+
+```yaml
+services:
+  fastapi-app:
+    build: .
+    env_file:
+      - .env
+      - .env.production
+```
+
+## Verification
+
+Verify your configuration is loaded correctly:
+
+```bash
+# Start the application
+uvicorn app:app --reload
+
+# Check logs for environment loading
+# Should see dotenv loading confirmation
+```
+
+Test API endpoints to ensure OpenAI integration works:
+
+```bash
+curl -X POST http://localhost:8000/api/recommedations/temperature \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min": 20,
+    "max": 30,
+    "value": 25,
+    "label": "maize"
+  }'
+```
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Protect API Keys">
+    - Never commit `.env` files to version control
+    - Use `.gitignore` to exclude sensitive files
+    - Rotate API keys regularly
+    - Use environment-specific keys (development vs. production)
+  </Accordion>
+
+  <Accordion title="Restrict CORS in Production">
+    - Replace `allow_origins=["*"]` with specific domains
+    - Disable credentials if not needed
+    - Limit allowed methods to only those required
+  </Accordion>
+
+  <Accordion title="Use Secrets Management">
+    For production deployments:
+    - Use Docker secrets
+    - Cloud provider secret managers (AWS Secrets Manager, Azure Key Vault)
+    - Environment variable injection at runtime
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Deploy with Docker and Docker Compose
+  </Card>
+  <Card title="Production" icon="server" href="/deployment/production">
+    Production deployment best practices
+  </Card>
+</CardGroup>

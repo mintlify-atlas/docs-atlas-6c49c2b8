@@ -1,0 +1,98 @@
+---
+title: Introduction
+description: AI-powered harvest prediction and farming recommendations for rural farmers in Africa
+---
+
+# Welcome to MavunoX
+
+MavunoX is a comprehensive machine learning system designed to predict harvest seasons and provide AI-powered farming recommendations to rural farmers across Africa. By analyzing environmental factors such as soil pH, water availability, temperature, and humidity, MavunoX helps farmers optimize crop yields through data-driven insights.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Harvest Season Prediction" icon="calendar">
+    XGBoost-powered model predicting optimal harvest timing with 89% accuracy across 13 crops
+  </Card>
+  <Card title="Soil pH Analysis" icon="flask">
+    Predict soil pH from RGB color values using gradient boosting (RMSE: 0.70)
+  </Card>
+  <Card title="Water Availability Estimation" icon="droplet">
+    Estimate soil water content from grayscale analysis of soil images
+  </Card>
+  <Card title="AI-Powered Recommendations" icon="brain">
+    GPT-powered custom farming recommendations tailored to specific crops and conditions
+  </Card>
+</CardGroup>
+
+## Supported Crops
+
+MavunoX provides predictions and recommendations for 13 different crops:
+
+- Rice (140 days)
+- Maize (80 days)
+- Cotton (165 days)
+- Jute (135 days)
+- Chickpea (105 days)
+- Kidneybeans (115 days)
+- Pigeonpeas (120 days)
+- Mothbeans (75 days)
+- Mungbean (75 days)
+- Blackgram (75 days)
+- Lentil (115 days)
+- Watermelon (80 days)
+- Muskmelon (85 days)
+
+## How It Works
+
+MavunoX combines three specialized machine learning models with GPT-based recommendations:
+
+1. **Soil pH Predictor** - Converts RGB soil color values into pH estimates using XGBoost regression trained on soil color-to-pH mappings
+2. **Water Availability Model** - Estimates water content from grayscale soil images using linear interpolation
+3. **Main Harvest Predictor** - XGBoost classifier that predicts harvest seasons based on pH, water availability, crop type, and country (Nigeria, South Africa, Kenya, Sudan)
+4. **Recommendation Engine** - OpenAI GPT-3.5 Turbo generates context-aware farming advice for temperature, humidity, pH, and water management
+
+## Model Performance
+
+The main harvest prediction model achieves:
+
+- **Overall Accuracy**: 89%
+- **Macro Average Precision**: 92%
+- **Macro Average Recall**: 92%
+- **Macro Average F1-Score**: 92%
+
+<Note>
+The model was trained on data from the [Klusterthon Hackathon](https://www.kluster.africa/problem-statements/precision-farming-for-best-product-results-with-data), focusing on environmental factors across four African countries.
+</Note>
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your first harvest prediction in under 5 minutes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore all available endpoints and data models
+  </Card>
+  <Card title="Model Architecture" icon="diagram-project" href="/models/harvest-prediction">
+    Deep dive into the ML models powering MavunoX
+  </Card>
+  <Card title="Deployment Guide" icon="docker" href="/deployment/docker">
+    Deploy MavunoX using Docker and FastAPI
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+- **Harvest Planning**: Predict optimal harvest seasons based on current environmental conditions
+- **Soil Analysis**: Analyze soil pH and water content using smartphone camera images
+- **Crop Optimization**: Get recommendations for improving temperature, humidity, pH, and water levels
+- **Regional Adaptation**: Country-specific predictions for Nigeria, South Africa, Kenya, and Sudan
+
+## Technology Stack
+
+- **Framework**: FastAPI with CORS support
+- **ML Models**: XGBoost (classifier and regressor)
+- **AI Engine**: OpenAI GPT-3.5 Turbo
+- **Data Processing**: Pandas, NumPy, Scikit-learn
+- **Deployment**: Docker, Uvicorn
+- **Python Version**: 3.9+

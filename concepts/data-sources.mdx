@@ -1,0 +1,292 @@
+---
+title: Data Sources
+description: Training datasets, crop information database, and supported regions for the MavunoX ML system
+---
+
+## Overview
+
+MavunoX leverages multiple data sources to train its machine learning models and provide accurate predictions. This page details the datasets used, their origins, and the comprehensive crop information database.
+
+## Primary Training Dataset
+
+### Klusterthon Hackathon Dataset
+
+The main prediction model is trained on agricultural data from the [Klusterthon Hackathon](https://www.kluster.africa/problem-statements/precision-farming-for-best-product-results-with-data).
+
+**Dataset Characteristics:**
+
+- **Geographic Coverage**: Nigeria, Kenya, South Africa, Sudan
+- **Crops**: 13 different crop types
+- **Environmental Factors**: Temperature, humidity, pH, water availability
+- **Target Variable**: Harvest season (spring, summer, rainy, winter)
+- **Size**: 1,400 records across different seasons and crops
+
+### Data Distribution Insights
+
+<AccordionGroup>
+  <Accordion title="Regional Distribution" icon="globe">
+    **Nigeria** is the most represented country in the dataset, providing the largest concentration of training data. This reflects the region's agricultural significance and data availability.
+    
+    Distribution by country:
+    - Nigeria: Majority of records
+    - South Africa: Second highest
+    - Kenya: Moderate representation
+    - Sudan: Smaller subset
+  </Accordion>
+  
+  <Accordion title="Seasonal Distribution" icon="calendar">
+    **Rainy season** is the most common season in the dataset, reflecting the importance of monsoon agriculture in African farming.
+    
+    Season frequency (in order):
+    1. Rainy season
+    2. Winter season
+    3. Spring season
+    4. Summer season
+  </Accordion>
+  
+  <Accordion title="Crop Distribution" icon="seedling">
+    **Maize** emerged as the most frequently occurring crop, indicating its significance as a staple food across the supported regions.
+    
+    Top crops by frequency:
+    1. Maize
+    2. Rice
+    3. Chickpea
+    4. Kidneybeans
+    5. Other pulses and cash crops
+  </Accordion>
+</AccordionGroup>
+
+## Soil pH Training Data
+
+### RGB-to-pH Mapping Dataset
+
+The Soil pH Predictor model is trained on data derived from academic research:
+
+**Source**: Research paper "Determine the pH of Soil by Using Neural Network Based on Soil's Colour" ([ResearchGate](https://www.researchgate.net/publication/336681057_Determine_the_pH_of_Soil_by_Using_Neural_Network_Based_on_Soil's_Colour))
+
+**Data Format**:
+```
+R, G, B, pH
+133, 98, 30, 7.05
+172, 139, 106, 6.81
+176, 152, 114, 6.63
+...
+```
+
+**Dataset Size**: 50 RGB-to-pH mappings covering pH range from approximately 5.5 to 8.4
+
+<Note>
+While the original research used neural networks, MavunoX implements an XGBoost regressor which achieved comparable accuracy with better interpretability.
+</Note>
+
+## Crop Information Database
+
+### Comprehensive Crop Profiles
+
+The system maintains detailed environmental requirement profiles for all 13 supported crops. Each profile includes optimal ranges for:
+
+- Temperature (°C)
+- Humidity (%)
+- Soil pH
+- Water availability (mm)
+
+### Sample Crop Requirements
+
+<Tabs>
+  <Tab title="Rice">
+    **Temperature**
+    - Min: 21.3°C
+    - Max: 26.2°C
+    - Optimal: 23.7°C
+    
+    **Humidity**
+    - Min: 80.5%
+    - Max: 83.8%
+    - Optimal: 82.3%
+    
+    **Soil pH**
+    - Min: 5.58
+    - Max: 7.29
+    - Optimal: 6.43
+    
+    **Water Availability**
+    - Min: 195.0 mm
+    - Max: 276.9 mm
+    - Optimal: 236.2 mm
+    
+    **Growth Duration**: 140 days
+  </Tab>
+  
+  <Tab title="Maize">
+    **Temperature**
+    - Min: 18.9°C
+    - Max: 25.3°C
+    - Optimal: 22.4°C
+    
+    **Humidity**
+    - Min: 59.2%
+    - Max: 71.7%
+    - Optimal: 65.1%
+    
+    **Soil pH**
+    - Min: 5.75
+    - Max: 6.68
+    - Optimal: 6.25
+    
+    **Water Availability**
+    - Min: 65.8 mm
+    - Max: 104.2 mm
+    - Optimal: 84.8 mm
+    
+    **Growth Duration**: 80 days
+  </Tab>
+  
+  <Tab title="Chickpea">
+    **Temperature**
+    - Min: 17.5°C
+    - Max: 20.3°C
+    - Optimal: 18.9°C
+    
+    **Humidity**
+    - Min: 14.8%
+    - Max: 18.9%
+    - Optimal: 16.9%
+    
+    **Soil pH**
+    - Min: 6.41
+    - Max: 8.17
+    - Optimal: 7.34
+    
+    **Water Availability**
+    - Min: 70.8 mm
+    - Max: 89.6 mm
+    - Optimal: 80.1 mm
+    
+    **Growth Duration**: 105 days
+  </Tab>
+  
+  <Tab title="Cotton">
+    **Temperature**
+    - Min: 22.7°C
+    - Max: 25.3°C
+    - Optimal: 24.0°C
+    
+    **Humidity**
+    - Min: 76.2%
+    - Max: 83.6%
+    - Optimal: 79.8%
+    
+    **Soil pH**
+    - Min: 6.19
+    - Max: 7.64
+    - Optimal: 6.91
+    
+    **Water Availability**
+    - Min: 66.5 mm
+    - Max: 92.0 mm
+    - Optimal: 80.4 mm
+    
+    **Growth Duration**: 165 days
+  </Tab>
+</Tabs>
+
+## All Supported Crops
+
+Complete list with growth durations:
+
+| Crop | Category | Duration | Water Needs |
+|------|----------|----------|-------------|
+| **Blackgram** | Pulse | 75 days | Moderate |
+| **Chickpea** | Pulse | 105 days | Moderate-High |
+| **Cotton** | Cash Crop | 165 days | Moderate-High |
+| **Jute** | Fiber Crop | 135 days | High |
+| **Kidneybeans** | Pulse | 115 days | Moderate-High |
+| **Lentil** | Pulse | 115 days | Low-Moderate |
+| **Maize** | Cereal | 80 days | Moderate |
+| **Mothbeans** | Pulse | 75 days | Low-Moderate |
+| **Mungbean** | Pulse | 75 days | Low-Moderate |
+| **Muskmelon** | Vegetable | 85 days | Low |
+| **Pigeonpeas** | Pulse | 120 days | Moderate-High |
+| **Rice** | Cereal | 140 days | Very High |
+| **Watermelon** | Vegetable | 80 days | Low-Moderate |
+
+<Info>
+The crop information is stored in a pickled database file (`crop_info.pkl`) that maps each crop to its complete environmental requirement profile.
+</Info>
+
+## Data Preprocessing
+
+### Main Model Preprocessing Steps
+
+1. **Feature Selection**
+   - Dropped "harvest season" column (not needed for prediction)
+   - Excluded "temperature" to prevent data leakage
+
+2. **Feature Engineering**
+   - Created `ph_to_water_availability_ratio` feature
+   - This ratio captures the relationship between soil acidity and moisture
+
+3. **Categorical Encoding**
+   - One-hot encoded `Country` variable (4 categories)
+   - One-hot encoded `label` (crop type) variable (13 categories)
+
+4. **Target Encoding**
+   - Label encoded `season` variable (4 classes)
+
+### Train/Test Split
+
+- **Training set**: ~80% of data
+- **Test set**: ~20% of data (280 samples)
+- Split maintains class distribution for balanced evaluation
+
+## Data Quality Considerations
+
+<Warning>
+**Limitations to be aware of:**
+
+1. **Geographic bias**: Nigeria is overrepresented in the dataset
+2. **Seasonal imbalance**: Rainy season dominates the distribution
+3. **Crop variety**: Limited to 13 crops (expansion planned)
+4. **Water model simplicity**: Current grayscale-based approach is simplified
+</Warning>
+
+<Tip>
+**Future enhancements planned:**
+
+- Expand geographic coverage beyond current four countries
+- Collect more balanced seasonal data
+- Add support for additional crop varieties
+- Implement more sophisticated water availability prediction using ML
+- Incorporate satellite imagery and weather data
+</Tip>
+
+## Region-Specific Information
+
+### Nigeria
+- **Coverage**: Extensive across multiple agricultural zones
+- **Primary crops**: Rice, maize, chickpea, cotton
+- **Climate zones**: Tropical, sub-tropical
+
+### Kenya
+- **Coverage**: Major agricultural regions
+- **Primary crops**: Maize, rice, beans
+- **Climate zones**: Varied from arid to highland
+
+### South Africa
+- **Coverage**: Commercial farming areas
+- **Primary crops**: Maize, cotton, various pulses
+- **Climate zones**: Mediterranean to subtropical
+
+### Sudan
+- **Coverage**: Limited but growing
+- **Primary crops**: Sorghum, millet, sesame (limited in current dataset)
+- **Climate zones**: Arid to semi-arid
+
+<CardGroup cols={2}>
+  <Card title="How It Works" icon="gear" href="/concepts/how-it-works">
+    See how these data sources are used in the ML pipeline
+  </Card>
+  <Card title="System Overview" icon="chart-network" href="/concepts/overview">
+    Back to high-level architecture
+  </Card>
+</CardGroup>

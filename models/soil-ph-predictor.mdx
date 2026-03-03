@@ -1,0 +1,227 @@
+---
+title: 'Soil pH Predictor'
+description: 'XGBoost-based model for predicting soil pH from RGB color values'
+---
+
+## Overview
+
+The Soil pH Predictor estimates soil pH levels based on soil color information captured through RGB values. The predicted pH serves as input to the main harvest prediction model. This implementation uses XGBoost regressor, inspired by the research paper ["Determine the pH of Soil by Using Neural Network Based on Soil's Colour"](https://www.researchgate.net/publication/336681057_Determine_the_pH_of_Soil_by_Using_Neural_Network_Based_on_Soil's_Colour).
+
+## Model Architecture
+
+### Algorithm
+- **Model Type**: XGBoost Regressor
+- **Model Path**: `ML_Models/soil_colour_model.pkl`
+- **Input**: RGB color values with engineered features
+- **Output**: Continuous soil pH value
+
+### Evaluation Metric
+- **RMSE (Cross-Validation)**: 0.7049
+- **Metric**: Root Mean Squared Error across folds
+
+## Feature Engineering
+
+The model transforms raw RGB values into multiple color-based features:
+
+### 1. RGB Ratios
+
+```python
+rgb_data['R/G'] = rgb_data['R'] / rgb_data['G']
+rgb_data['G/B'] = rgb_data['G'] / rgb_data['B']
+rgb_data['R/B'] = rgb_data['R'] / rgb_data['B']
+```
+
+### 2. Hue Calculation
+
+```python
+def rgb_to_hue(rgb):
+    rgb = rgb / 255.0
+    max_rgb = rgb.max(axis=1)
+    min_rgb = rgb.min(axis=1)
+    delta = max_rgb - min_rgb
+    hue = np.zeros_like(max_rgb)
+    non_zero_delta = delta != 0
+    
+    hue[non_zero_delta] = np.select(
+        [max_rgb == rgb[:, 0], max_rgb == rgb[:, 1], max_rgb == rgb[:, 2]],
+        [
+            (rgb[:, 1] - rgb[:, 2]) / delta,
+            2 + (rgb[:, 2] - rgb[:, 0]) / delta,
+            4 + (rgb[:, 0] - rgb[:, 1]) / delta
+        ]
+    )
+    hue = (hue * 60) % 360
+    return hue
+
+rgb_data['hue'] = rgb_to_hue(rgb_data[['R', 'G', 'B']].values)
+```
+
+### 3. Saturation and Brightness
+
+```python
+import colorsys
+
+# Saturation
+rgb_data['Saturation'] = rgb_data.apply(
+    lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[1], 
+    axis=1
+)
+
+# Brightness
+rgb_data['Brightness'] = rgb_data.apply(
+    lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[2], 
+    axis=1
+)
+```
+
+## Input/Output Specification
+
+<ParamField path="input.R" type="int" required>
+  Red color channel (0-255)
+</ParamField>
+
+<ParamField path="input.G" type="int" required>
+  Green color channel (0-255)
+</ParamField>
+
+<ParamField path="input.B" type="int" required>
+  Blue color channel (0-255)
+</ParamField>
+
+<ParamField path="output.soil_pH" type="float">
+  Predicted soil pH value (typically 0-14 scale)
+</ParamField>
+
+## Usage Example
+
+```python
+import pickle
+import pandas as pd
+import numpy as np
+import colorsys
+
+# Load soil pH model
+with open('ML_Models/soil_colour_model.pkl', 'rb') as f:
+    soil_model = pickle.load(f)
+
+def predict_soil_ph(R, G, B):
+    # Create DataFrame from RGB values
+    rgb = {'R': R, 'G': G, 'B': B}
+    rgb_data = pd.DataFrame.from_dict({0: rgb}, orient='index')
+    
+    # Calculate RGB ratios
+    rgb_data['R/G'] = rgb_data['R'] / rgb_data['G']
+    rgb_data['G/B'] = rgb_data['G'] / rgb_data['B']
+    rgb_data['R/B'] = rgb_data['R'] / rgb_data['B']
+    
+    # RGB to Hue conversion
+    def rgb_to_hue(rgb):
+        rgb = rgb / 255.0
+        max_rgb = rgb.max(axis=1)
+        min_rgb = rgb.min(axis=1)
+        delta = max_rgb - min_rgb
+        hue = np.zeros_like(max_rgb)
+        non_zero_delta = delta != 0
+        hue[non_zero_delta] = np.select(
+            [max_rgb == rgb[:, 0], max_rgb == rgb[:, 1], max_rgb == rgb[:, 2]],
+            [
+                (rgb[:, 1] - rgb[:, 2]) / delta,
+                2 + (rgb[:, 2] - rgb[:, 0]) / delta,
+                4 + (rgb[:, 0] - rgb[:, 1]) / delta
+            ]
+        )
+        hue = (hue * 60) % 360
+        return hue
+    
+    rgb_data['hue'] = rgb_to_hue(rgb_data[['R', 'G', 'B']].values)
+    
+    # Add Saturation and Brightness
+    rgb_data['Saturation'] = rgb_data.apply(
+        lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[1], 
+        axis=1
+    )
+    rgb_data['Brightness'] = rgb_data.apply(
+        lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[2], 
+        axis=1
+    )
+    
+    # Predict soil pH
+    soil_pH = soil_model.predict(rgb_data)[0]
+    return soil_pH
+
+# Example usage
+soil_pH = predict_soil_ph(R=120, G=85, B=60)
+print(f"Predicted soil pH: {soil_pH}")
+```
+
+## Complete Soil Profile Function
+
+The `get_SoilProfile()` function in `general.py` combines both pH and water availability prediction:
+
+```python
+def get_SoilProfile(R, G, B):
+    """Returns both soil pH and water availability from RGB values"""
+    
+    # Prepare RGB data with all engineered features
+    rgb = {'R': R, 'G': G, 'B': B}
+    rgb_data = pd.DataFrame.from_dict({0: rgb}, orient='index')
+    
+    # Add ratio features
+    rgb_data['R/G'] = rgb_data['R'] / rgb_data['G']
+    rgb_data['G/B'] = rgb_data['G'] / rgb_data['B']
+    rgb_data['R/B'] = rgb_data['R'] / rgb_data['B']
+    
+    # Add hue
+    rgb_data['hue'] = rgb_to_hue(rgb_data[['R', 'G', 'B']].values)
+    
+    # Add saturation and brightness
+    rgb_data['Saturation'] = rgb_data.apply(
+        lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[1], 
+        axis=1
+    )
+    rgb_data['Brightness'] = rgb_data.apply(
+        lambda row: colorsys.rgb_to_hsv(row['R']/255, row['G']/255, row['B']/255)[2], 
+        axis=1
+    )
+    
+    # Predict soil pH
+    soil_pH = soil_model.predict(rgb_data)[0]
+    
+    # Calculate water availability
+    gray_scale = 1 - ((R * 0.299 + G * 0.582 + B * 0.114) / 255)
+    water_availability = 25 + ((gray_scale - 0.12) * (250 - 25)) / (0.65 - 0.12)
+    
+    return soil_pH, water_availability
+```
+
+## Data Source
+
+The training dataset is derived from the research paper mapping RGB values to corresponding soil pH levels. The model was trained on empirical soil color-pH relationships documented in agricultural research.
+
+## Features Summary
+
+The model uses 8 features total:
+
+1. **R** - Red channel (0-255)
+2. **G** - Green channel (0-255)
+3. **B** - Blue channel (0-255)
+4. **R/G** - Red to Green ratio
+5. **G/B** - Green to Blue ratio
+6. **R/B** - Red to Blue ratio
+7. **Hue** - Color hue (0-360 degrees)
+8. **Saturation** - Color saturation (0-1)
+9. **Brightness** - Color brightness/value (0-1)
+
+## Integration
+
+The soil pH predictor is automatically called during the first data processing step:
+
+```python
+soil_pH, water_avail = get_SoilProfile(entry.R, entry.G, entry.B)
+harvest_season = get_HarvestSeason(soil_pH, water_avail, entry.label, entry.country)
+```
+
+The predicted pH is then:
+1. Passed to the harvest prediction model
+2. Compared against crop-specific optimal pH ranges
+3. Used to calculate recommendation scores

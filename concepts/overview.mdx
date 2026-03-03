@@ -1,0 +1,110 @@
+---
+title: System Overview
+description: High-level architecture of the MavunoX machine learning system for harvest prediction
+---
+
+## Introduction
+
+MavunoX is a comprehensive machine learning system designed to predict harvest seasons for rural farmers in Africa. By analyzing environmental factors and soil characteristics, the system provides actionable predictions and recommendations to optimize crop yields.
+
+## System Architecture
+
+The MavunoX ML system employs a sophisticated three-model pipeline that works together to deliver accurate harvest season predictions:
+
+<CardGroup cols={3}>
+  <Card title="Soil pH Predictor" icon="droplet">
+    Analyzes RGB values from soil images to predict soil pH levels
+  </Card>
+  <Card title="Water Availability Model" icon="water">
+    Estimates water content based on soil color grayscale values
+  </Card>
+  <Card title="Main Prediction Model" icon="calendar">
+    Predicts harvest seasons using XGBoost classifier
+  </Card>
+</CardGroup>
+
+## Core Components
+
+### 1. Soil Profile Analysis
+
+The system begins by processing soil images to extract two critical environmental parameters:
+
+- **Soil pH**: Predicted using XGBoost regression on RGB color values and derived features (hue, saturation, brightness)
+- **Water Availability**: Calculated using grayscale conversion and linear interpolation
+
+### 2. Harvest Season Prediction
+
+Using the extracted soil profile data along with crop type and country information, the main XGBoost classifier predicts the optimal harvest season with 89% accuracy.
+
+### 3. AI-Powered Recommendations
+
+The system generates custom farming recommendations using OpenAI's GPT-3.5 Turbo API, tailored to:
+- Current environmental conditions
+- Target crop requirements
+- Optimal ranges for temperature, humidity, pH, and water availability
+
+## Supported Regions
+
+MavunoX currently supports agricultural predictions across four African countries:
+
+<CardGroup cols={2}>
+  <Card title="Nigeria" icon="location-dot">
+    Primary region with extensive training data
+  </Card>
+  <Card title="Kenya" icon="location-dot">
+    East African agricultural zone
+  </Card>
+  <Card title="South Africa" icon="location-dot">
+    Southern region coverage
+  </Card>
+  <Card title="Sudan" icon="location-dot">
+    Northern agricultural region
+  </Card>
+</CardGroup>
+
+## Supported Crops
+
+The system provides predictions and recommendations for 13 different crop types:
+
+- **Cereals**: Maize, Rice
+- **Pulses**: Chickpea, Kidneybeans, Lentil, Pigeonpeas, Mothbeans, Mungbean, Blackgram
+- **Cash Crops**: Cotton, Jute
+- **Vegetables**: Muskmelon, Watermelon
+
+<Note>
+Maize is the most frequently occurring crop in the training dataset, with the rainy season being the most common growing period.
+</Note>
+
+## Model Performance
+
+The MavunoX system demonstrates strong predictive capabilities:
+
+| Component | Metric | Performance |
+|-----------|--------|-------------|
+| Main Model | Overall Accuracy | 89% |
+| Main Model | Macro F1-Score | 92% |
+| Soil pH Predictor | RMSE | 0.70 |
+| Water Availability | Method | Linear interpolation based on grayscale |
+
+## Deployment
+
+The system is deployed as a FastAPI application with Docker containerization, providing RESTful endpoints for:
+
+- Soil profile analysis
+- Harvest season prediction
+- Environmental factor recommendations (temperature, humidity, pH, water availability)
+
+<Info>
+API documentation is available at [https://mavunox.onrender.com](https://mavunox.onrender.com)
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="How It Works" icon="gear" href="/concepts/how-it-works">
+    Detailed workflow and model pipeline
+  </Card>
+  <Card title="Data Sources" icon="database" href="/concepts/data-sources">
+    Training data and crop information
+  </Card>
+</CardGroup>
